@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>WIP</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="shell">
+    <header id="top-banner">
+      <div class="brand">WIP</div>
+      <div class="banner-actions">
+        <span id="running-count" class="running-count"></span>
+        <button id="add-app-btn">+ Add app</button>
+      </div>
+    </header>
+
+    <div id="body">
+      <nav id="side-nav">
+        <div class="nav-item active" data-page="registry">Registry</div>
+        <div class="nav-item" data-page="brainstorm">Brainstorm</div>
+        <div class="nav-item" data-page="activity">Activity</div>
+        <div class="nav-divider"></div>
+        <div class="nav-item" data-page="settings">Settings</div>
+      </nav>
+
+      <main id="page-content">
+        <!-- Rendered by main.js depending on selected nav item -->
+      </main>
+    </div>
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>

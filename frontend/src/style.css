@@ -1,0 +1,190 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: system-ui, sans-serif;
+  margin: 0;
+  background: #1e1e1e;
+  color: #eee;
+}
+
+#shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+#top-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid #333;
+  background: #242424;
+  flex-shrink: 0;
+}
+
+.brand {
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.running-count {
+  font-size: 0.85rem;
+  color: #9c9;
+}
+
+#body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+#side-nav {
+  width: 180px;
+  flex-shrink: 0;
+  border-right: 1px solid #333;
+  background: #242424;
+  padding: 0.75rem 0;
+}
+
+.nav-item {
+  padding: 0.5rem 1.25rem;
+  margin: 0.15rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: #ccc;
+  cursor: pointer;
+}
+
+.nav-item:hover {
+  background: #2f2f2f;
+}
+
+.nav-item.active {
+  background: #3a3a3a;
+  color: #fff;
+  font-weight: 500;
+}
+
+.nav-divider {
+  border-top: 1px solid #333;
+  margin: 0.75rem 0.5rem;
+}
+
+#page-content {
+  flex: 1;
+  padding: 1.25rem;
+  overflow-y: auto;
+}
+
+.app-card {
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.app-card-header {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.app-description {
+  color: #aaa;
+  font-size: 0.9rem;
+  margin: 0 0 0.5rem;
+}
+
+.app-meta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.8rem;
+  color: #888;
+  margin-bottom: 0.5rem;
+}
+
+.component-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+}
+
+button {
+  cursor: pointer;
+  background: #333;
+  color: #eee;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+button:hover {
+  background: #3d3d3d;
+}
+
+.settings-page {
+  max-width: 480px;
+}
+
+.settings-page h2 {
+  font-size: 1rem;
+  margin: 1.25rem 0 0.5rem;
+  color: #ddd;
+}
+
+.settings-page h2:first-child {
+  margin-top: 0;
+}
+
+.settings-page label {
+  display: block;
+  font-size: 0.85rem;
+  color: #aaa;
+  margin: 0.5rem 0 0.25rem;
+}
+
+.settings-page input {
+  width: 100%;
+  padding: 0.5rem;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  color: #eee;
+  font-size: 0.9rem;
+}
+
+.settings-page .hint {
+  font-size: 0.75rem;
+  color: #777;
+  margin: 0.25rem 0 0;
+}
+
+.settings-page button {
+  margin-top: 1rem;
+}
+
+#save-status {
+  margin-left: 0.75rem;
+}
+
+.placeholder-page {
+  color: #888;
+}
+
+.placeholder-page h2 {
+  color: #ddd;
+  font-size: 1.1rem;
+}
