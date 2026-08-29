@@ -4,6 +4,7 @@
 
 const pages = {
   registry: renderRegistryPage,
+  archived: renderArchivedPage,
   brainstorm: renderBrainstormPage,
   activity: renderActivityPage,
   settings: renderSettingsPage,
@@ -50,6 +51,53 @@ async function renderRegistryPage(container) {
   } catch (err) {
     container.innerHTML = `<p>Error loading apps: ${err}</p>`;
   }
+}
+
+// Archived view — same data shape as the registry, but apps here are
+// hidden from the main list (see next-phase-plan.md: hidden by default,
+// dedicated Archived view, not just greyed out inline). Cards are rendered
+// simply here rather than reusing renderAppCard's full start/stop/pill
+// treatment, since an archived app has one relevant action: unarchive it.
+async function renderArchivedPage(container) {
+  container.innerHTML = "Loading...";
+  try {
+    const res = await fetch("/api/apps?archived=true");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const apps = await res.json();
+    container.innerHTML = "";
+
+    if (apps.length === 0) {
+      container.innerHTML = `<p class="hint">No archived apps.</p>`;
+      return;
+    }
+
+    apps.forEach((entry) => container.appendChild(renderArchivedCard(entry)));
+  } catch (err) {
+    container.innerHTML = `<p>Error loading archived apps: ${err}</p>`;
+  }
+}
+
+function renderArchivedCard(entry) {
+  const card = document.createElement("div");
+  card.className = "app-card archived-card";
+
+  card.innerHTML = `
+    <div class="app-card-header">
+      <span class="app-name">${entry.name}</span>
+    </div>
+    <p class="app-description">${entry.description || ""}</p>
+    <p class="hint">${entry.localPath || ""}</p>
+  `;
+
+  const unarchiveBtn = document.createElement("button");
+  unarchiveBtn.textContent = "Unarchive";
+  unarchiveBtn.addEventListener("click", async () => {
+    await fetch(`/api/apps/${entry.id}/unarchive`, { method: "POST" });
+    renderArchivedPage(document.getElementById("page-content"));
+  });
+  card.appendChild(unarchiveBtn);
+
+  return card;
 }
 
 function updateRunningCount(apps) {
@@ -114,38 +162,41 @@ function capitalize(s) {
 }
 
 // renderConnectionPill: a small clickable tag showing whether an
-// integration is connected. Jira/Confluence are always shown greyed out
-// with a "coming soon" state since those integrations aren't built yet
-// (see mvp-scope.md) — clicking them does nothing yet rather than pretending.
+// integration is connected — the label itself states the status (e.g.
+// "Git: Connected" / "Git: Not connected") rather than relying on color
+// alone. Jira/Confluence are always shown greyed out with a "coming soon"
+// state since those integrations aren't built yet (see mvp-scope.md) —
+// clicking them does nothing, rather than pretending there's somewhere to go.
 function renderConnectionPill(label, connected, comingSoon, appId) {
   const pill = document.createElement("span");
   pill.className = "connection-pill";
   if (comingSoon) {
     pill.classList.add("pill-coming-soon");
-    pill.textContent = `${label} (soon)`;
+    pill.textContent = `${label}: Coming soon`;
     pill.title = `${label} integration is planned but not available yet`;
-  } else if (connected) {
-    pill.classList.add("pill-connected");
-    pill.textContent = label;
-    pill.title = `${label} is connected — click to view details`;
-    pill.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openAppDetail(appId);
-    });
   } else {
-    pill.classList.add("pill-disconnected");
-    pill.textContent = label;
-    pill.title = `${label} is not connected — click to configure`;
+    pill.classList.add(connected ? "pill-connected" : "pill-disconnected");
+    pill.textContent = `${label}: ${connected ? "Connected" : "Not connected"}`;
+    pill.title = connected
+      ? `${label} is connected — click to view details`
+      : `${label} is not connected — click to configure`;
     pill.addEventListener("click", (e) => {
       e.stopPropagation();
-      openAppDetail(appId);
+      openAppDetail(appId, "git-section");
     });
   }
   return pill;
 }
 
-function openAppDetail(appId) {
+// pendingScrollTarget: set by a pill click before navigating, so the detail
+// page can scroll straight to the relevant section once it's rendered
+// (e.g. clicking the Git pill from the registry should land you on the
+// Git section of that app's detail page, not just the top of the page).
+let pendingScrollTarget = null;
+
+function openAppDetail(appId, scrollTargetId) {
   selectedAppId = appId;
+  pendingScrollTarget = scrollTargetId || null;
   navigateTo("app-detail");
 }
 
@@ -461,13 +512,41 @@ async function renderAppDetailPage(container) {
     <button id="change-folder-btn">Change folder</button>
     <div id="edit-folder-picker" style="display:none; margin-top:0.5rem;"></div>
 
+    <div id="git-section" class="detail-section">
+      <h2>Git</h2>
+      <p class="hint" id="git-status-text">
+        ${entry.gitConnected ? "This folder is under git." : "This folder is not under git yet."}
+      </p>
+      <p class="hint">Remote: ${entry.repoUrl ? escapeAttr(entry.repoUrl) : "none set"}</p>
+      <button id="git-init-btn" style="${entry.gitConnected ? "display:none;" : ""}">Initialize git here</button>
+    </div>
+
     <div style="margin-top:1.25rem;">
       <button id="save-edit-btn">Save changes</button>
       <button id="cancel-edit-btn">Cancel</button>
+      <button id="archive-btn" class="danger-btn">Archive</button>
       <span id="edit-status-msg" class="hint"></span>
     </div>
   `;
   container.appendChild(wrapper);
+
+  wrapper.querySelector("#git-init-btn")?.addEventListener("click", async () => {
+    await fetch("/api/git-init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: entry.localPath }),
+    });
+    // Re-render the whole page so the pill, status text, and button all
+    // reflect the freshly-initialized repo rather than being patched by hand.
+    pendingScrollTarget = "git-section";
+    renderAppDetailPage(container);
+  });
+
+  if (pendingScrollTarget) {
+    const target = wrapper.querySelector(`#${pendingScrollTarget}`);
+    if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
+    pendingScrollTarget = null;
+  }
 
   wrapper.querySelector("#edit-status").value = entry.status;
 
@@ -486,6 +565,23 @@ async function renderAppDetailPage(container) {
   });
 
   wrapper.querySelector("#cancel-edit-btn").addEventListener("click", () => navigateTo("registry"));
+
+  wrapper.querySelector("#archive-btn").addEventListener("click", async () => {
+    const confirmed = confirm(`Archive "${entry.name}"? It will be hidden from the registry but can be restored from the Archived view.`);
+    if (!confirmed) return;
+
+    // Deliberately a second, separate confirmation — deleting the folder
+    // is the one genuinely irreversible action here, so it must never be
+    // bundled into the softer "archive" confirmation above.
+    const alsoDelete = confirm("Also delete the folder from disk? This cannot be undone.");
+
+    await fetch(`/api/apps/${entry.id}/archive`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deleteFolder: alsoDelete }),
+    });
+    navigateTo("registry");
+  });
 
   wrapper.querySelector("#save-edit-btn").addEventListener("click", async () => {
     const name = wrapper.querySelector("#edit-name").value.trim();

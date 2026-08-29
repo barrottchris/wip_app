@@ -100,8 +100,13 @@ func (d *DB) migrate() error {
 			branches        JSONB NOT NULL DEFAULT '[]',
 			components      JSONB NOT NULL DEFAULT '[]',
 			created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-			last_touched_at TIMESTAMPTZ NOT NULL DEFAULT now()
+			last_touched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+			archived        BOOLEAN NOT NULL DEFAULT false
 		);
+
+		-- Idempotent: covers anyone who already had a database from before
+		-- archiving existed, without needing a real migration tool yet.
+		ALTER TABLE apps ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT false;
 
 		CREATE TABLE IF NOT EXISTS settings (
 			key   TEXT PRIMARY KEY,

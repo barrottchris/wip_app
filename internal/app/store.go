@@ -55,15 +55,28 @@ func NewStore(conn *sql.DB) *Store {
 	return &Store{conn: conn}
 }
 
-// ListApps returns every tracked app for the registry view.
+// ListApps returns every non-archived tracked app for the main registry
+// view. Archived apps are deliberately excluded — see ListArchivedApps.
 func (s *Store) ListApps() ([]Entry, error) {
+	return s.listByArchived(false)
+}
+
+// ListArchivedApps returns only archived apps, for the dedicated Archived
+// view (see mvp-scope.md / next-phase-plan.md — archived apps are hidden
+// from the main registry, not just greyed out).
+func (s *Store) ListArchivedApps() ([]Entry, error) {
+	return s.listByArchived(true)
+}
+
+func (s *Store) listByArchived(archived bool) ([]Entry, error) {
 	rows, err := s.conn.Query(`
 		SELECT id, name, description, stack, status, notes, local_path,
 		       repo_url, default_branch, branches, components,
-		       created_at, last_touched_at
+		       created_at, last_touched_at, archived
 		FROM apps
+		WHERE archived = $1
 		ORDER BY last_touched_at DESC
-	`)
+	`, archived)
 	if err != nil {
 		return nil, fmt.Errorf("listing apps: %w", err)
 	}
@@ -81,11 +94,14 @@ func (s *Store) ListApps() ([]Entry, error) {
 }
 
 // GetApp returns a single app's full detail.
+// GetApp returns a single app's full detail, regardless of archived state
+// (the detail/edit page needs to work for archived apps too, e.g. to
+// unarchive them).
 func (s *Store) GetApp(id string) (Entry, error) {
 	row := s.conn.QueryRow(`
 		SELECT id, name, description, stack, status, notes, local_path,
 		       repo_url, default_branch, branches, components,
-		       created_at, last_touched_at
+		       created_at, last_touched_at, archived
 		FROM apps WHERE id = $1
 	`, id)
 
@@ -111,6 +127,21 @@ func (s *Store) UpdateApp(id string, name, description, localPath string, status
 	return err
 }
 
+// ArchiveApp soft-deletes an app — sets archived = true. It never touches
+// the filesystem itself; if the folder should also be deleted, that is a
+// separate, explicit step the caller (main.go's handler) performs after
+// its own confirmation, not something this method does implicitly.
+func (s *Store) ArchiveApp(id string) error {
+	_, err := s.conn.Exec(`UPDATE apps SET archived = true WHERE id = $1`, id)
+	return err
+}
+
+// UnarchiveApp reverses ArchiveApp, restoring an app to the main registry.
+func (s *Store) UnarchiveApp(id string) error {
+	_, err := s.conn.Exec(`UPDATE apps SET archived = false WHERE id = $1`, id)
+	return err
+}
+
 // CreateApp inserts a new app entry — the eventual backing for the
 // "Add app" onboarding flow (not yet wired up to the frontend).
 func (s *Store) CreateApp(entry Entry) error {
@@ -132,8 +163,8 @@ func (s *Store) CreateApp(entry Entry) error {
 		INSERT INTO apps (
 			id, name, description, stack, status, notes, local_path,
 			repo_url, default_branch, branches, components,
-			created_at, last_touched_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			created_at, last_touched_at, archived
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, false)
 	`,
 		entry.ID, entry.Name, entry.Description, stackJSON, entry.Status,
 		entry.Notes, entry.LocalPath, entry.RepoURL, entry.DefaultBranch,
@@ -155,7 +186,7 @@ func scanEntry(row scanner) (Entry, error) {
 	err := row.Scan(
 		&e.ID, &e.Name, &e.Description, &stackJSON, &e.Status, &e.Notes,
 		&e.LocalPath, &e.RepoURL, &e.DefaultBranch, &branchesJSON,
-		&componentsJSON, &e.CreatedAt, &e.LastTouchedAt,
+		&componentsJSON, &e.CreatedAt, &e.LastTouchedAt, &e.Archived,
 	)
 	if err != nil {
 		return Entry{}, err

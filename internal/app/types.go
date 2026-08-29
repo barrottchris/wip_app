@@ -58,4 +58,5 @@ type Entry struct {
 	Components    []Component `json:"components"`
 	CreatedAt     time.Time   `json:"createdAt"`
 	LastTouchedAt time.Time   `json:"lastTouchedAt"`
+	Archived      bool        `json:"archived"`
 }

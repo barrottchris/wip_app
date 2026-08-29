@@ -111,7 +111,13 @@ func (s *Server) withConnections(entry app.Entry) EntryWithConnections {
 func (s *Server) handleListApps(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		entries, err := s.store.ListApps()
+		var entries []app.Entry
+		var err error
+		if r.URL.Query().Get("archived") == "true" {
+			entries, err = s.store.ListArchivedApps()
+		} else {
+			entries, err = s.store.ListApps()
+		}
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -294,6 +300,16 @@ func (s *Server) handleAppSubroutes(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("TODO: %s component %q for app %q\n", action, body.Component, id)
 		writeJSON(w, map[string]string{"status": "ok"})
 
+	case "archive":
+		s.handleArchiveApp(w, r, id)
+
+	case "unarchive":
+		if err := s.store.UnarchiveApp(id); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, map[string]string{"status": "ok"})
+
 	default:
 		http.NotFound(w, r)
 	}
@@ -337,6 +353,42 @@ func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request, id stri
 		return
 	}
 	writeJSON(w, s.withConnections(entry))
+}
+
+// handleArchiveApp soft-archives an app. Deleting the folder on disk is a
+// separate, explicit opt-in (deleteFolder: true in the request body) — the
+// frontend prompts for this as its own confirmation, distinct from the
+// archive confirmation itself, since it's the one genuinely irreversible
+// action in the app so far.
+func (s *Server) handleArchiveApp(w http.ResponseWriter, r *http.Request, id string) {
+	var body struct {
+		DeleteFolder bool `json:"deleteFolder"`
+	}
+	// Body is optional — archiving alone doesn't require one. Ignore a
+	// decode error here rather than failing the whole request over it.
+	_ = json.NewDecoder(r.Body).Decode(&body)
+
+	entry, err := s.store.GetApp(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	if err := s.store.ArchiveApp(id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if body.DeleteFolder && entry.LocalPath != "" {
+		if err := os.RemoveAll(entry.LocalPath); err != nil {
+			// The app is already archived at this point — report the
+			// folder-deletion failure but don't pretend archiving failed too.
+			http.Error(w, fmt.Sprintf("archived, but folder deletion failed: %v", err), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	writeJSON(w, map[string]string{"status": "ok"})
 }
 
 // handleSettings handles GET (read current settings) and POST (update them)

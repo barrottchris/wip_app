@@ -356,3 +356,64 @@ button:hover {
 .app-name:hover {
   text-decoration: underline;
 }
+
+/* Select dropdowns — match the rest of the app's inputs instead of the
+   browser's mismatched default styling */
+select {
+  width: 100%;
+  padding: 0.5rem 2rem 0.5rem 0.5rem;
+  background-color: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  color: #eee;
+  font-size: 0.9rem;
+  font-family: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'><path fill='%23999' d='M1 1l5 5 5-5'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 0.65rem center;
+  background-size: 0.65rem auto;
+  cursor: pointer;
+}
+
+select:hover {
+  border-color: #4a4a4a;
+}
+
+select:focus {
+  outline: none;
+  border-color: #5a5a5a;
+}
+
+.detail-section {
+  background: #242424;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+}
+
+.detail-section h2 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.archived-card {
+  opacity: 0.85;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.danger-btn {
+  background: #4a2222;
+  border-color: #6a3030;
+  color: #f0a0a0;
+}
+
+.danger-btn:hover {
+  background: #5a2828;
+}
