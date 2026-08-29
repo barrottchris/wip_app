@@ -1,12 +1,14 @@
 package fsbrowse
 
 import (
+	"wip/internal/fsbrowse"
+
 	"runtime"
 	"testing"
 )
 
 func TestListDefaultsToRoot(t *testing.T) {
-	listing, err := List("")
+	listing, err := fsbrowse.List("")
 	if err != nil {
 		t.Fatalf("List(\"\") failed: %v", err)
 	}

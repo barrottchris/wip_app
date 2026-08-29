@@ -1,16 +1,20 @@
 package gitutil
 
-import "testing"
+import (
+	"wip/internal/gitutil"
+
+	"testing"
+)
 
 func TestHasGitAndInit(t *testing.T) {
 	dir := t.TempDir()
-	if HasGit(dir) {
+	if gitutil.HasGit(dir) {
 		t.Fatalf("expected no git before init")
 	}
-	if err := Init(dir); err != nil {
+	if err := gitutil.Init(dir); err != nil {
 		t.Fatalf("git init failed: %v", err)
 	}
-	if !HasGit(dir) {
+	if !gitutil.HasGit(dir) {
 		t.Fatalf("expected git after init")
 	}
 	t.Log("OK")

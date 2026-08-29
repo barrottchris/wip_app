@@ -1,6 +1,10 @@
 package app
 
-import "testing"
+import (
+	"testing"
+
+	"wip/internal/app"
+)
 
 func TestSlugify(t *testing.T) {
 	cases := map[string]string{
@@ -10,7 +14,7 @@ func TestSlugify(t *testing.T) {
 		"Already-fine": "already-fine",
 	}
 	for input, want := range cases {
-		got := Slugify(input)
+		got := app.Slugify(input)
 		if got != want {
 			t.Errorf("Slugify(%q) = %q, want %q", input, got, want)
 		}

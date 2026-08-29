@@ -1,19 +1,22 @@
-package app
+package app_test
 
-import "testing"
+import (
+	"testing"
+
+	"wip/internal/app"
+)
 
 func TestRuntimeTrackerAppliesRunningState(t *testing.T) {
-	tracker := NewRuntimeTracker()
+	tracker := app.NewRuntimeTracker()
 
-	entry := Entry{
+	entry := app.Entry{
 		ID: "myapp",
-		Components: []Component{
+		Components: []app.Component{
 			{Name: "Frontend"},
 			{Name: "Backend"},
 		},
 	}
 
-	// Nothing started yet — both should read as not running.
 	tracker.ApplyTo(&entry)
 	if entry.Components[0].Running || entry.Components[1].Running {
 		t.Fatalf("expected both components not running initially, got %+v", entry.Components)
@@ -36,7 +39,7 @@ func TestRuntimeTrackerAppliesRunningState(t *testing.T) {
 }
 
 func TestRuntimeTrackerIsolatesApps(t *testing.T) {
-	tracker := NewRuntimeTracker()
+	tracker := app.NewRuntimeTracker()
 	tracker.SetRunning("app-a", "App", true)
 
 	if tracker.IsRunning("app-b", "App") {

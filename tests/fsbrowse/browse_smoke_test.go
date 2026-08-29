@@ -1,6 +1,8 @@
 package fsbrowse
 
 import (
+	"wip/internal/fsbrowse"
+
 	"os"
 	"testing"
 )
@@ -11,7 +13,7 @@ func TestListSmoke(t *testing.T) {
 	os.MkdirAll(dir+"/subdir2", 0o755)
 	os.MkdirAll(dir+"/.hidden", 0o755)
 
-	listing, err := List(dir)
+	listing, err := fsbrowse.List(dir)
 	if err != nil {
 		t.Fatalf("List failed: %v", err)
 	}
