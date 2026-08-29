@@ -417,3 +417,32 @@ select:focus {
 .danger-btn:hover {
   background: #5a2828;
 }
+
+.component-edit-row {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 1.4fr 90px 32px;
+  gap: 6px;
+  margin-bottom: 6px;
+  align-items: center;
+}
+
+.component-edit-row input,
+.component-edit-row select {
+  width: 100%;
+  padding: 0.4rem;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  color: #eee;
+  font-size: 0.85rem;
+}
+
+.remove-component-btn {
+  padding: 0.3rem;
+  color: #d88;
+  background: #2a2a2a;
+}
+
+#add-component-btn {
+  margin-top: 0.25rem;
+}

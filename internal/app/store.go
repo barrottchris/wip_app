@@ -142,6 +142,19 @@ func (s *Store) UnarchiveApp(id string) error {
 	return err
 }
 
+// UpdateComponents replaces an app's entire component list wholesale —
+// the simplest approach (vs. diffing individual rows), chosen since the
+// frontend always submits the full current set from its edit form rather
+// than individual add/remove operations against the backend.
+func (s *Store) UpdateComponents(id string, components []Component) error {
+	componentsJSON, err := json.Marshal(components)
+	if err != nil {
+		return err
+	}
+	_, err = s.conn.Exec(`UPDATE apps SET components = $1 WHERE id = $2`, componentsJSON, id)
+	return err
+}
+
 // CreateApp inserts a new app entry — the eventual backing for the
 // "Add app" onboarding flow (not yet wired up to the frontend).
 func (s *Store) CreateApp(entry Entry) error {

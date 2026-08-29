@@ -521,6 +521,17 @@ async function renderAppDetailPage(container) {
       <button id="git-init-btn" style="${entry.gitConnected ? "display:none;" : ""}">Initialize git here</button>
     </div>
 
+    <div id="components-section" class="detail-section">
+      <h2>Components</h2>
+      <p class="hint">Each component gets its own start/stop command and run mode. Add as many as this app needs.</p>
+      <div id="component-rows"></div>
+      <button id="add-component-btn">+ Add component</button>
+      <div style="margin-top:0.75rem;">
+        <button id="save-components-btn">Save components</button>
+        <span id="components-status-msg" class="hint"></span>
+      </div>
+    </div>
+
     <div style="margin-top:1.25rem;">
       <button id="save-edit-btn">Save changes</button>
       <button id="cancel-edit-btn">Cancel</button>
@@ -529,6 +540,40 @@ async function renderAppDetailPage(container) {
     </div>
   `;
   container.appendChild(wrapper);
+
+  // Component rows are built from the entry's current components, then
+  // edited/added/removed entirely client-side until "Save components" is
+  // clicked — which submits the whole list at once (see UpdateComponents).
+  const componentRowsEl = wrapper.querySelector("#component-rows");
+  (entry.components || []).forEach((component) => addComponentRow(componentRowsEl, component));
+
+  wrapper.querySelector("#add-component-btn").addEventListener("click", () => {
+    addComponentRow(componentRowsEl, { name: "", startCommand: "", stopCommand: "", runMode: "native" });
+  });
+
+  wrapper.querySelector("#save-components-btn").addEventListener("click", async () => {
+    const components = Array.from(componentRowsEl.querySelectorAll(".component-edit-row")).map((row) => ({
+      name: row.querySelector(".comp-name").value.trim(),
+      startCommand: row.querySelector(".comp-start").value.trim(),
+      stopCommand: row.querySelector(".comp-stop").value.trim(),
+      runMode: row.querySelector(".comp-runmode").value,
+    }));
+
+    const statusMsgEl = wrapper.querySelector("#components-status-msg");
+
+    if (components.some((c) => !c.name)) {
+      statusMsgEl.textContent = "Every component needs a name.";
+      return;
+    }
+
+    const res = await fetch(`/api/apps/${entry.id}/components`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ components }),
+    });
+
+    statusMsgEl.textContent = res.ok ? "Saved." : `Error: ${await res.text()}`;
+  });
 
   wrapper.querySelector("#git-init-btn")?.addEventListener("click", async () => {
     await fetch("/api/git-init", {
@@ -606,6 +651,31 @@ async function renderAppDetailPage(container) {
 
 function escapeAttr(s) {
   return (s || "").replace(/"/g, "&quot;");
+}
+
+// addComponentRow builds one editable component row (name, start/stop
+// commands, run mode, remove button) and appends it to containerEl. Used
+// both for existing components (pre-filled) and the "+ Add component"
+// button (blank row).
+function addComponentRow(containerEl, component) {
+  const row = document.createElement("div");
+  row.className = "component-edit-row";
+
+  row.innerHTML = `
+    <input type="text" class="comp-name" placeholder="Name (e.g. Frontend)" value="${escapeAttr(component.name)}" />
+    <input type="text" class="comp-start" placeholder="Start command" value="${escapeAttr(component.startCommand)}" />
+    <input type="text" class="comp-stop" placeholder="Stop command" value="${escapeAttr(component.stopCommand)}" />
+    <select class="comp-runmode">
+      <option value="native">Native</option>
+      <option value="docker">Docker</option>
+    </select>
+    <button class="remove-component-btn" title="Remove this component">✕</button>
+  `;
+
+  row.querySelector(".comp-runmode").value = component.runMode || "native";
+  row.querySelector(".remove-component-btn").addEventListener("click", () => row.remove());
+
+  containerEl.appendChild(row);
 }
 
 // A small folder browser reused for the edit page's "change folder" flow —

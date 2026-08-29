@@ -310,6 +310,9 @@ func (s *Server) handleAppSubroutes(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, map[string]string{"status": "ok"})
 
+	case "components":
+		s.handleUpdateComponents(w, r, id)
+
 	default:
 		http.NotFound(w, r)
 	}
@@ -389,6 +392,52 @@ func (s *Server) handleArchiveApp(w http.ResponseWriter, r *http.Request, id str
 	}
 
 	writeJSON(w, map[string]string{"status": "ok"})
+}
+
+// handleUpdateComponents saves the app's full component list — the
+// backing for the detail page's "Components" section. Replaces the whole
+// list wholesale (see UpdateComponents) rather than diffing rows.
+func (s *Server) handleUpdateComponents(w http.ResponseWriter, r *http.Request, id string) {
+	if r.Method != http.MethodPut {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var body struct {
+		Components []app.Component `json:"components"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	for i, c := range body.Components {
+		if c.Name == "" {
+			http.Error(w, fmt.Sprintf("component %d: name is required", i), http.StatusBadRequest)
+			return
+		}
+		switch c.RunMode {
+		case app.RunModeDocker, app.RunModeNative:
+			// valid
+		case "":
+			body.Components[i].RunMode = app.RunModeNative // sensible default
+		default:
+			http.Error(w, fmt.Sprintf("component %d: invalid run mode %q", i, c.RunMode), http.StatusBadRequest)
+			return
+		}
+	}
+
+	if err := s.store.UpdateComponents(id, body.Components); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	entry, err := s.store.GetApp(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, s.withConnections(entry))
 }
 
 // handleSettings handles GET (read current settings) and POST (update them)
