@@ -1,58 +1,206 @@
 package app
 
 import (
+	"database/sql"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
-// Store is a placeholder persistence layer.
-// TODO: replace with real storage once decided (e.g. SQLite vs JSON files —
-// see open questions in mvp-scope.md / data-model.md). For now this is just
-// an in-memory slice seeded with sample data so the frontend has something
-// to render while the UI is being built.
+// Store persists App Entries in Postgres (see internal/db). Replaces the
+// earlier in-memory placeholder — data now survives a restart.
 type Store struct {
-	entries []Entry
+	conn *sql.DB
 }
 
-func NewStore() *Store {
-	return &Store{
-		entries: seedData(),
-	}
-}
-
-func (s *Store) ListApps() []Entry {
-	return s.entries
-}
-
-func (s *Store) GetApp(id string) (Entry, error) {
-	for _, e := range s.entries {
-		if e.ID == id {
-			return e, nil
+// Slugify turns a display name into a URL/ID-safe slug (e.g. "My Cool App"
+// -> "my-cool-app"). Used to derive an app's ID from its name during
+// onboarding. Not guaranteed unique on its own — callers should check for
+// collisions (see EnsureUniqueID).
+func Slugify(name string) string {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	var b strings.Builder
+	lastWasDash := false
+	for _, r := range lower {
+		switch {
+		case r >= 'a' && r <= 'z' || r >= '0' && r <= '9':
+			b.WriteRune(r)
+			lastWasDash = false
+		default:
+			if !lastWasDash {
+				b.WriteRune('-')
+				lastWasDash = true
+			}
 		}
 	}
-	return Entry{}, fmt.Errorf("app not found: %s", id)
+	return strings.Trim(b.String(), "-")
 }
 
-func seedData() []Entry {
-	now := time.Now()
-	return []Entry{
-		{
-			ID:            "bordle",
-			Name:          "Bordle",
-			Description:   "Geography-based word game",
-			Stack:         []string{"Node.js"},
-			Status:        StatusActive,
-			LocalPath:     `C:\Dev\WIP\bordle`,
-			RepoURL:       "https://github.com/example/bordle",
-			DefaultBranch: "main",
-			Branches: []Branch{
-				{Name: "main", LastCommitAt: now.Add(-48 * time.Hour), IsDefault: true},
-			},
-			Components: []Component{
-				{Name: "App", StartCommand: "npm start", StopCommand: "", RunMode: RunModeNative},
-			},
-			CreatedAt:     now.Add(-90 * 24 * time.Hour),
-			LastTouchedAt: now.Add(-48 * time.Hour),
-		},
+// EnsureUniqueID appends -2, -3, etc. to base until it doesn't collide with
+// an existing app ID.
+func (s *Store) EnsureUniqueID(base string) (string, error) {
+	id := base
+	for i := 2; ; i++ {
+		_, err := s.GetApp(id)
+		if err != nil {
+			// GetApp returning an error means no app has this ID — free to use.
+			return id, nil
+		}
+		id = fmt.Sprintf("%s-%d", base, i)
 	}
+}
+
+func NewStore(conn *sql.DB) *Store {
+	return &Store{conn: conn}
+}
+
+// ListApps returns every tracked app for the registry view.
+func (s *Store) ListApps() ([]Entry, error) {
+	rows, err := s.conn.Query(`
+		SELECT id, name, description, stack, status, notes, local_path,
+		       repo_url, default_branch, branches, components,
+		       created_at, last_touched_at
+		FROM apps
+		ORDER BY last_touched_at DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("listing apps: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []Entry
+	for rows.Next() {
+		entry, err := scanEntry(rows)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, entry)
+	}
+	return entries, rows.Err()
+}
+
+// GetApp returns a single app's full detail.
+func (s *Store) GetApp(id string) (Entry, error) {
+	row := s.conn.QueryRow(`
+		SELECT id, name, description, stack, status, notes, local_path,
+		       repo_url, default_branch, branches, components,
+		       created_at, last_touched_at
+		FROM apps WHERE id = $1
+	`, id)
+
+	entry, err := scanEntry(row)
+	if err == sql.ErrNoRows {
+		return Entry{}, fmt.Errorf("app not found: %s", id)
+	}
+	return entry, err
+}
+
+// UpdateApp updates the user-editable fields of an existing app: name,
+// description, local path, and lifecycle status. Deliberately does not
+// touch branches/components here — those are managed by their own flows
+// (git integration, start/stop config) rather than this general edit form.
+// Does not update last_touched_at — that reflects real project activity
+// (git commits), not metadata edits.
+func (s *Store) UpdateApp(id string, name, description, localPath string, status Status) error {
+	_, err := s.conn.Exec(`
+		UPDATE apps
+		SET name = $1, description = $2, local_path = $3, status = $4
+		WHERE id = $5
+	`, name, description, localPath, status, id)
+	return err
+}
+
+// CreateApp inserts a new app entry — the eventual backing for the
+// "Add app" onboarding flow (not yet wired up to the frontend).
+func (s *Store) CreateApp(entry Entry) error {
+	stackJSON, err := json.Marshal(entry.Stack)
+	if err != nil {
+		return err
+	}
+	branchesJSON, err := json.Marshal(entry.Branches)
+	if err != nil {
+		return err
+	}
+	componentsJSON, err := json.Marshal(entry.Components)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	_, err = s.conn.Exec(`
+		INSERT INTO apps (
+			id, name, description, stack, status, notes, local_path,
+			repo_url, default_branch, branches, components,
+			created_at, last_touched_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+	`,
+		entry.ID, entry.Name, entry.Description, stackJSON, entry.Status,
+		entry.Notes, entry.LocalPath, entry.RepoURL, entry.DefaultBranch,
+		branchesJSON, componentsJSON, now, now,
+	)
+	return err
+}
+
+// scanner is satisfied by both *sql.Row and *sql.Rows, letting scanEntry
+// serve both GetApp (single row) and ListApps (multiple rows).
+type scanner interface {
+	Scan(dest ...interface{}) error
+}
+
+func scanEntry(row scanner) (Entry, error) {
+	var e Entry
+	var stackJSON, branchesJSON, componentsJSON []byte
+
+	err := row.Scan(
+		&e.ID, &e.Name, &e.Description, &stackJSON, &e.Status, &e.Notes,
+		&e.LocalPath, &e.RepoURL, &e.DefaultBranch, &branchesJSON,
+		&componentsJSON, &e.CreatedAt, &e.LastTouchedAt,
+	)
+	if err != nil {
+		return Entry{}, err
+	}
+
+	if err := json.Unmarshal(stackJSON, &e.Stack); err != nil {
+		return Entry{}, fmt.Errorf("decoding stack: %w", err)
+	}
+	if err := json.Unmarshal(branchesJSON, &e.Branches); err != nil {
+		return Entry{}, fmt.Errorf("decoding branches: %w", err)
+	}
+	if err := json.Unmarshal(componentsJSON, &e.Components); err != nil {
+		return Entry{}, fmt.Errorf("decoding components: %w", err)
+	}
+
+	return e, nil
+}
+
+// SeedIfEmpty inserts one sample app on first run only, so the UI has
+// something to show before real onboarding exists. Safe to call every
+// startup — it checks first.
+func (s *Store) SeedIfEmpty() error {
+	var count int
+	if err := s.conn.QueryRow(`SELECT COUNT(*) FROM apps`).Scan(&count); err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+
+	now := time.Now()
+	return s.CreateApp(Entry{
+		ID:            "bordle",
+		Name:          "Bordle",
+		Description:   "Geography-based word game",
+		Stack:         []string{"Node.js"},
+		Status:        StatusActive,
+		LocalPath:     `C:\Dev\WIP\bordle`,
+		RepoURL:       "https://github.com/example/bordle",
+		DefaultBranch: "main",
+		Branches: []Branch{
+			{Name: "main", LastCommitAt: now.Add(-48 * time.Hour), IsDefault: true},
+		},
+		Components: []Component{
+			{Name: "App", StartCommand: "npm start", StopCommand: "", RunMode: RunModeNative},
+		},
+	})
 }

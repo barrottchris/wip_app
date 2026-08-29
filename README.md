@@ -91,3 +91,156 @@ The frontend now has a proper shell instead of a single flat page:
 Client-side routing between nav pages is a small hand-rolled router in
 `main.js` (`navigateTo()`), no framework — consistent with the rest of this
 scaffold's "no build step" approach.
+
+## Persistence (embedded Postgres) — added after app shell
+
+Data now persists in a real Postgres database instead of resetting on every
+restart. "Embedded" means: `internal/db/db.go` starts an actual Postgres
+binary as a subprocess when WIP starts (via `github.com/fergusstrange/
+embedded-postgres`), downloading it once and caching it after that — no
+separate Postgres install needed. Schema and SQL are genuine Postgres, so
+pointing WIP at a real hosted Postgres later is just a connection-string
+change.
+
+- `internal/db/db.go` — starts/stops the embedded Postgres process, opens
+  the connection, and runs schema migration (`CREATE TABLE IF NOT EXISTS`).
+- `internal/app/store.go` — rewritten to read/write the `apps` table via
+  `database/sql` + `github.com/lib/pq`. `Stack`, `Branches`, and
+  `Components` are stored as `JSONB` columns.
+- `internal/config/config.go` — rewritten as a simple key/value `settings`
+  table, same connection.
+- `main.go` — starts the database before the HTTP server, seeds one sample
+  app on first run only (`SeedIfEmpty`), and shuts the Postgres process
+  down cleanly on Ctrl+C.
+
+**Verified in this environment:** `go build` compiles cleanly with these
+changes.
+
+**Not verified here, needs checking on your machine:** actually *running*
+it — the sandbox this was built in has restricted network access and
+couldn't reach Maven Central to download the Postgres binary
+(`embedded-postgres` fetches it from there on first run). On a normal
+machine with regular internet access this should just work, but it's worth
+confirming `go run .` actually starts cleanly and creates the tables before
+building anything further on top of it.
+
+If the embedded Postgres approach turns out to be flaky in practice (slow
+first start, binary download issues, port conflicts), the fallback is
+installing Postgres normally and just pointing the same connection string
+at it — the schema and Go code don't change either way.
+
+## Onboarding ("Add app") — added after persistence
+
+The "Add app" button now works. It supports both onboarding flows discussed:
+
+- **Existing folder** — browse to and select a folder that already has code
+  in it.
+- **Create new** — browse to a parent location and create a fresh empty
+  folder there.
+
+Since a browser can't return a real, absolute OS path from a native file
+picker (a deliberate browser security restriction), the folder picker is
+**server-side**: `internal/fsbrowse/browse.go` lists directories via the Go
+backend (which has full local disk access), and the frontend renders
+whatever comes back as a clickable list with up/into navigation. This only
+works because WIP's backend runs locally — it wouldn't work if this were a
+truly remote/hosted service.
+
+Git handling matches what was decided: WIP **never initializes git
+silently**. When you select an existing folder with no `.git`, a prompt
+appears offering to run `git init`, with an explicit "skip for now" option.
+
+New pieces:
+- `internal/fsbrowse/browse.go` — directory listing, with a real passing
+  unit test (`browse_smoke_test.go`) confirming hidden folders are excluded
+  and parent/current paths are correct.
+- `internal/gitutil/gitutil.go` — `HasGit` / `Init`, wrapping the local
+  `git` command. Also has a real passing test (`gitutil_smoke_test.go`)
+  confirming detection and init both work.
+- `internal/app/store.go` — added `Slugify` (name → URL-safe ID) and
+  `EnsureUniqueID` (handles name collisions by appending `-2`, `-3`, etc.),
+  each with their own test.
+- New API endpoints: `GET /api/browse`, `GET /api/git-status`,
+  `POST /api/git-init`, and `POST /api/apps` (create).
+- `frontend/src/main.js` — new `renderAddAppPage`, wired to the nav's "Add
+  app" button, with the existing/new toggle and folder browser.
+
+**Verified in this environment:** `go build` and `go vet` both pass cleanly.
+The filesystem, git, and slug logic have real unit tests that pass
+(`go test ./...`). The full end-to-end flow (clicking through the actual UI
+against a live embedded Postgres) still needs confirming on your machine,
+same caveat as the persistence step — this sandbox can't reach the network
+Postgres binary download needs.
+
+## Still not built
+
+- Real git status for the *registry view* (branches/last-commit still come
+  from placeholder data — onboarding's git-init is new, but reading real
+  branch info back into the app entry isn't wired up yet)
+- Real start/stop process execution (still prints to console)
+- Editing an app after creation (stack, notes, components all need a way
+  to be added post-onboarding, since the creation form is deliberately
+  minimal — see mvp-scope.md)
+- GitHub token real secret storage
+- Branch health check, launch-in-VS-Code/Docker/file actions (flagged
+  post-MVP in mvp-scope.md)
+
+## Connections, editing, and real running state — added after onboarding
+
+Several fixes/additions based on using the onboarding flow for real:
+
+- **Folder picker now defaults to a drive root** (`C:\` on Windows, `/`
+  elsewhere) instead of the current user's home folder — one click closer
+  to anywhere useful, and not biased toward any particular username.
+- **"Running" vs. lifecycle status are now genuinely separate.** `Entry.
+  Status` (active/paused/abandoned/shipped) is a label *you* set — it does
+  not mean "currently running," and editing it never did and never will
+  change based on process state. Whether something is actually running is
+  computed live from component state (`internal/app/runtime.go`) and shown
+  as a distinct "Running" badge that overrides the lifecycle badge on the
+  registry card when true. This wasn't a real distinction before — every
+  app just always showed "Active" regardless of anything; now start/stop
+  actions genuinely flip a tracked state, and the registry reflects it.
+  (This state is intentionally *not* persisted — it resets to "not
+  running" on restart, same as real processes would.)
+- **Connection pills** on each app card (and the detail page): Git,
+  Jira, Confluence. Git is checked live against the actual folder each
+  time (not cached, so it can't go stale if git gets initialized outside
+  WIP). Jira and Confluence are always shown greyed out / "coming soon" —
+  they're not built yet, so the UI doesn't pretend otherwise.
+- **App detail/edit page** — click an app's name (or a Git/pill) to open
+  it. Editable: name, description, status, and folder path (via the same
+  server-side folder browser as onboarding, kept in page-local state so it
+  never conflicts with the add-app form's state).
+
+New/changed pieces:
+- `internal/app/runtime.go` — `RuntimeTracker`, with tests confirming
+  running state is tracked correctly and apps don't leak state into each
+  other.
+- `internal/app/store.go` — added `UpdateApp` for the edit form.
+- `main.go` — `EntryWithConnections` wraps entries with live-computed
+  `gitConnected` plus the Jira/Confluence coming-soon flags; `PUT
+  /api/apps/{id}` added for edits; `start`/`stop` now call
+  `runtime.SetRunning` for real instead of only printing.
+- `internal/fsbrowse/browse.go` — default path fixed, with a test.
+
+**Verified in this environment:** full `go build`, `go vet`, and `go test
+./...` all pass. Frontend JS syntax-checked with Node. The actual browser
+click-through against a live server still needs your machine, same caveat
+as before.
+
+## Still not built
+
+- Real git status for the registry view's branch/last-commit display
+  (still placeholder data — separate from the new live git-*connected*
+  check, which only answers yes/no, not branch details)
+- Real start/stop process execution (state now tracks correctly, but
+  nothing real is actually launched yet)
+- Editing stack, notes, or components (the edit page is deliberately
+  narrow — name/description/status/path only, per the original scope
+  decision to keep forms minimal)
+- GitHub token real secret storage
+- Remove/archive action for apps
+- Branch health check, launch-in-VS-Code/Docker/file actions, Jira/
+  Confluence integrations themselves (all flagged post-MVP in
+  mvp-scope.md)

@@ -1,53 +1,77 @@
 package config
 
+import "database/sql"
+
 // Settings holds user-configurable, app-wide settings — the kind of thing
 // shown on a Settings/Config page rather than per-app metadata.
 type Settings struct {
-	// ManagedRoot is the single folder on disk where WIP keeps/expects
-	// tracked apps to live (the "organized C drive" requirement).
-	ManagedRoot string `json:"managedRoot"`
-
-	// GitHub integration — MVP just stores a username and whether a token
-	// has been set (never echo the token itself back to the frontend).
-	GitHubUsername    string `json:"githubUsername"`
-	GitHubTokenIsSet  bool   `json:"githubTokenIsSet"`
-
-	// DockerAvailable reflects whether WIP could detect a local Docker
-	// install — informational only for now, not enforced.
-	DockerAvailable bool `json:"dockerAvailable"`
+	ManagedRoot      string `json:"managedRoot"`
+	GitHubUsername   string `json:"githubUsername"`
+	GitHubTokenIsSet bool   `json:"githubTokenIsSet"`
+	DockerAvailable  bool   `json:"dockerAvailable"`
 }
 
-// Store is a placeholder in-memory settings store.
-// TODO: persist to disk (likely alongside wherever app registry data ends
-// up being stored — see open storage question in data-model.md).
+// Store persists settings as simple key/value rows in Postgres.
+// TODO: GitHub token itself should move to a real secret store (OS
+// credential manager or encrypted file) rather than the settings table —
+// only whether one is set gets persisted here for now, never the token.
 type Store struct {
-	settings Settings
+	conn *sql.DB
 }
 
-func NewStore() *Store {
-	return &Store{
-		settings: Settings{
-			ManagedRoot:      `C:\Dev\WIP`,
-			GitHubUsername:   "",
-			GitHubTokenIsSet: false,
-			DockerAvailable:  false,
-		},
+func NewStore(conn *sql.DB) *Store {
+	return &Store{conn: conn}
+}
+
+func (s *Store) Get() (Settings, error) {
+	settings := Settings{
+		ManagedRoot: `C:\Dev\WIP`, // default if not yet set
 	}
+
+	rows, err := s.conn.Query(`SELECT key, value FROM settings`)
+	if err != nil {
+		return settings, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var key, value string
+		if err := rows.Scan(&key, &value); err != nil {
+			return settings, err
+		}
+		switch key {
+		case "managed_root":
+			settings.ManagedRoot = value
+		case "github_username":
+			settings.GitHubUsername = value
+		case "github_token_is_set":
+			settings.GitHubTokenIsSet = value == "true"
+		}
+	}
+	return settings, rows.Err()
 }
 
-func (s *Store) Get() Settings {
-	return s.settings
+func (s *Store) UpdateManagedRoot(path string) error {
+	return s.upsert("managed_root", path)
 }
 
-func (s *Store) UpdateManagedRoot(path string) {
-	s.settings.ManagedRoot = path
+// SetGitHubToken records that a token was provided without storing the
+// token value itself in this table.
+func (s *Store) SetGitHubToken(username string, tokenProvided bool) error {
+	if err := s.upsert("github_username", username); err != nil {
+		return err
+	}
+	value := "false"
+	if tokenProvided {
+		value = "true"
+	}
+	return s.upsert("github_token_is_set", value)
 }
 
-// SetGitHubToken records that a token was provided without storing it in
-// this placeholder store — a real implementation needs a proper secrets
-// approach (OS credential store, encrypted file, etc.), not a TODO left in
-// memory.
-func (s *Store) SetGitHubToken(username string, tokenProvided bool) {
-	s.settings.GitHubUsername = username
-	s.settings.GitHubTokenIsSet = tokenProvided
+func (s *Store) upsert(key, value string) error {
+	_, err := s.conn.Exec(`
+		INSERT INTO settings (key, value) VALUES ($1, $2)
+		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+	`, key, value)
+	return err
 }

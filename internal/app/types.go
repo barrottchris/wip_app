@@ -2,12 +2,16 @@ package app
 
 import "time"
 
-// Status is the lifecycle state of a tracked app.
-// Placeholder set — confirm/finalize during data-model decisions.
+// Status is the user-set lifecycle stage of a tracked app — NOT whether it
+// is currently running. Whether something is actually running is a
+// separate, computed concept (see RuntimeTracker) based on live component
+// process state, and is never stored here. A "shipped" app and a "paused"
+// app are both, correctly, never "running" from WIP's point of view unless
+// something has actually been started.
 type Status string
 
 const (
-	StatusActive    Status = "active"
+	StatusActive    Status = "active" // actively being worked on
 	StatusPaused    Status = "paused"
 	StatusAbandoned Status = "abandoned"
 	StatusShipped   Status = "shipped"
