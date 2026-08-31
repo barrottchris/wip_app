@@ -9,6 +9,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"os"
 
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	_ "github.com/lib/pq"
@@ -23,20 +24,34 @@ const (
 
 // DB wraps the embedded Postgres process and the SQL connection to it.
 type DB struct {
-	postgres *embeddedpostgres.EmbeddedPostgres
-	Conn     *sql.DB
+	postgres   *embeddedpostgres.EmbeddedPostgres
+	Conn       *sql.DB
+	runtimeDir string
+	dataDir    string
 }
 
 // Start launches the embedded Postgres instance (downloading the binary on
 // first run only — cached after that) and returns a ready-to-use DB with
 // the schema already applied.
 func Start() (*DB, error) {
+	runtimeDir, err := os.MkdirTemp("", "wip-postgres-runtime-")
+	if err != nil {
+		return nil, fmt.Errorf("creating postgres runtime directory: %w", err)
+	}
+	dataDir, err := os.MkdirTemp("", "wip-postgres-data-")
+	if err != nil {
+		_ = os.RemoveAll(runtimeDir)
+		return nil, fmt.Errorf("creating postgres data directory: %w", err)
+	}
+
 	postgres := embeddedpostgres.NewDatabase(
 		embeddedpostgres.DefaultConfig().
 			Port(dbPort).
 			Username(dbUser).
 			Password(dbPassword).
-			Database(dbName),
+			Database(dbName).
+			RuntimePath(runtimeDir).
+			DataPath(dataDir),
 	)
 
 	if err := postgres.Start(); err != nil {
@@ -59,7 +74,7 @@ func Start() (*DB, error) {
 		return nil, fmt.Errorf("pinging database: %w", err)
 	}
 
-	d := &DB{postgres: postgres, Conn: conn}
+	d := &DB{postgres: postgres, Conn: conn, runtimeDir: runtimeDir, dataDir: dataDir}
 
 	if err := d.migrate(); err != nil {
 		_ = d.Stop()
@@ -76,7 +91,15 @@ func (d *DB) Stop() error {
 		_ = d.Conn.Close()
 	}
 	if d.postgres != nil {
-		return d.postgres.Stop()
+		if err := d.postgres.Stop(); err != nil {
+			return err
+		}
+	}
+	if d.runtimeDir != "" {
+		_ = os.RemoveAll(d.runtimeDir)
+	}
+	if d.dataDir != "" {
+		_ = os.RemoveAll(d.dataDir)
 	}
 	return nil
 }

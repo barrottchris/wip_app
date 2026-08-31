@@ -32,3 +32,18 @@ func TestFrontendRefactorEntryPoints(t *testing.T) {
 		t.Fatal("frontend/src/js/main.js must start on the registry page")
 	}
 }
+
+func TestArchiveWarningUsesInAppPrompt(t *testing.T) {
+	appDetailFile := filepath.Join("..", "..", "frontend", "src", "js", "pages", "appDetail.js")
+	content, err := os.ReadFile(appDetailFile)
+	if err != nil {
+		t.Fatalf("missing app detail page: %v", err)
+	}
+	text := string(content)
+	if strings.Contains(text, "confirm(") {
+		t.Fatal("archive flow must not use browser confirm() dialogs; use an in-app warning panel")
+	}
+	if !strings.Contains(text, "archive-confirm") {
+		t.Fatal("archive flow must render an in-app confirmation panel")
+	}
+}

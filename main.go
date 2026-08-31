@@ -98,6 +98,16 @@ type EntryWithConnections struct {
 
 func (s *Server) withConnections(entry app.Entry) EntryWithConnections {
 	s.runtime.ApplyTo(&entry)
+
+	if gitutil.HasGit(entry.LocalPath) {
+		if branch, err := gitutil.DefaultBranch(entry.LocalPath); err == nil && branch != "" {
+			entry.DefaultBranch = branch
+		}
+		if repoURL, err := gitutil.RemoteURL(entry.LocalPath); err == nil && repoURL != "" {
+			entry.RepoURL = repoURL
+		}
+	}
+
 	return EntryWithConnections{
 		Entry:                entry,
 		GitConnected:         gitutil.HasGit(entry.LocalPath),
@@ -191,7 +201,16 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, created)
+	if err := s.store.RefreshGitInfo(created.ID, created.LocalPath); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	created, err = s.store.GetApp(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, s.withConnections(created))
 }
 
 // handleBrowse powers the folder picker — lists subdirectories of a given
@@ -236,7 +255,29 @@ func (s *Server) handleGitInit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("git init failed: %v", err), http.StatusInternalServerError)
 		return
 	}
+	if err := s.store.RefreshGitInfoForPath(body.Path); err != nil {
+		http.Error(w, fmt.Sprintf("refresh git metadata failed: %v", err), http.StatusInternalServerError)
+		return
+	}
 	writeJSON(w, map[string]string{"status": "ok"})
+}
+
+func (s *Server) handleGitRefresh(w http.ResponseWriter, r *http.Request, id string) {
+	entry, err := s.store.GetApp(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if err := s.store.RefreshGitInfo(id, entry.LocalPath); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	updated, err := s.store.GetApp(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, s.withConnections(updated))
 }
 
 // handleAppSubroutes is a very simple manual router for MVP purposes.
@@ -283,6 +324,9 @@ func (s *Server) handleAppSubroutes(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, entry.Branches)
+
+	case "git-refresh":
+		s.handleGitRefresh(w, r, id)
 
 	case "start", "stop":
 		var body struct {
@@ -346,6 +390,10 @@ func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request, id stri
 	}
 
 	if err := s.store.UpdateApp(id, body.Name, body.Description, body.LocalPath, status); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := s.store.RefreshGitInfo(id, body.LocalPath); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

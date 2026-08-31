@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"wip/internal/gitutil"
 )
 
 // Store persists App Entries in Postgres (see internal/db). Replaces the
@@ -153,6 +155,47 @@ func (s *Store) UpdateComponents(id string, components []Component) error {
 	}
 	_, err = s.conn.Exec(`UPDATE apps SET components = $1 WHERE id = $2`, componentsJSON, id)
 	return err
+}
+
+// RefreshGitInfo updates the app's persisted repo metadata from the actual
+// repo on disk rather than trusting stale seed/default values.
+func (s *Store) RefreshGitInfo(id, path string) error {
+	if path == "" || !gitutil.HasGit(path) {
+		_, err := s.conn.Exec(`UPDATE apps SET repo_url = $1, default_branch = $2 WHERE id = $3`, "", "", id)
+		return err
+	}
+
+	repoURL, err := gitutil.RemoteURL(path)
+	if err != nil {
+		repoURL = ""
+	}
+	defaultBranch, err := gitutil.DefaultBranch(path)
+	if err != nil {
+		defaultBranch = ""
+	}
+
+	_, err = s.conn.Exec(`UPDATE apps SET repo_url = $1, default_branch = $2 WHERE id = $3`, repoURL, defaultBranch, id)
+	return err
+}
+
+// RefreshGitInfoForPath refreshes every app that points at a given local path.
+func (s *Store) RefreshGitInfoForPath(path string) error {
+	rows, err := s.conn.Query(`SELECT id FROM apps WHERE local_path = $1`, path)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		if err := s.RefreshGitInfo(id, path); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
 }
 
 // CreateApp inserts a new app entry — the eventual backing for the

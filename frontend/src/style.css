@@ -418,6 +418,40 @@ select:focus {
   background: #5a2828;
 }
 
+.archive-confirm {
+  background: #2a2a2a;
+  border: 1px solid #5a3b3b;
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  margin: 1rem 0;
+  color: #f0d3d3;
+}
+
+.archive-confirm p {
+  margin: 0 0 0.75rem;
+  line-height: 1.4;
+}
+
+.archive-delete-option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+  color: #ddd;
+  margin-bottom: 0.75rem;
+}
+
+.archive-delete-option input {
+  width: auto;
+  margin: 0;
+}
+
+.archive-confirm-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
 .component-edit-row {
   display: grid;
   grid-template-columns: 1fr 1.4fr 1.4fr 90px 32px;

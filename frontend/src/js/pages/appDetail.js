@@ -65,6 +65,18 @@ export async function renderAppDetailPage(container) {
       </div>
     </div>
 
+    <div id="archive-confirm" class="archive-confirm" style="display:none;">
+      <p>Archive "${escapeAttr(entry.name)}"? It will be hidden from the registry but can be restored from the Archived view.</p>
+      <label class="archive-delete-option">
+        <input type="checkbox" id="archive-delete-folder-checkbox" />
+        Also delete the folder from disk. This cannot be undone.
+      </label>
+      <div class="archive-confirm-actions">
+        <button id="archive-confirm-btn" class="danger-btn">Archive app</button>
+        <button id="archive-cancel-btn" type="button">Cancel</button>
+      </div>
+    </div>
+
     <div style="margin-top:1.25rem;">
       <button id="save-edit-btn">Save changes</button>
       <button id="cancel-edit-btn">Cancel</button>
@@ -120,11 +132,20 @@ export async function renderAppDetailPage(container) {
 
   wrapper.querySelector("#cancel-edit-btn").addEventListener("click", () => navigateTo("registry"));
 
-  wrapper.querySelector("#archive-btn").addEventListener("click", async () => {
-    const confirmed = confirm(`Archive "${entry.name}"? It will be hidden from the registry but can be restored from the Archived view.`);
-    if (!confirmed) return;
+  wrapper.querySelector("#archive-btn").addEventListener("click", () => {
+    const confirmEl = wrapper.querySelector("#archive-confirm");
+    confirmEl.style.display = "block";
+  });
 
-    const alsoDelete = confirm("Also delete the folder from disk? This cannot be undone.");
+  wrapper.querySelector("#archive-cancel-btn").addEventListener("click", () => {
+    const confirmEl = wrapper.querySelector("#archive-confirm");
+    confirmEl.style.display = "none";
+  });
+
+  wrapper.querySelector("#archive-confirm-btn").addEventListener("click", async () => {
+    const confirmEl = wrapper.querySelector("#archive-confirm");
+    const alsoDelete = wrapper.querySelector("#archive-delete-folder-checkbox").checked;
+    confirmEl.style.display = "none";
     await archiveApp(entry.id, alsoDelete);
     navigateTo("registry");
   });
