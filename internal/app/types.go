@@ -31,8 +31,9 @@ type Component struct {
 	StartCommand string  `json:"startCommand"`
 	StopCommand  string  `json:"stopCommand"`
 	RunMode      RunMode `json:"runMode"`
-	// Running is computed at runtime, not persisted.
-	Running bool `json:"running"`
+	// Running and URL are computed at runtime, not persisted.
+	Running bool   `json:"running"`
+	URL     string `json:"url,omitempty"`
 }
 
 // Branch reflects a git branch discovered for an app's repo.

@@ -43,5 +43,10 @@ func (t *RuntimeTracker) ApplyTo(entry *Entry) {
 	componentStates := t.state[entry.ID]
 	for i := range entry.Components {
 		entry.Components[i].Running = componentStates[entry.Components[i].Name]
+		if entry.Components[i].Running {
+			if entry.Components[i].URL == "" {
+				entry.Components[i].URL = InferBrowseURL(entry.Components[i])
+			}
+		}
 	}
 }

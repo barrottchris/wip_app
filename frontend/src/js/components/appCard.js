@@ -86,21 +86,37 @@ function renderComponentRow(appId, component) {
   const row = document.createElement("div");
   row.className = "component-row";
 
+  const browseLink = component.running && component.url
+    ? `<a class="component-url" href="${component.url}" target="_blank" rel="noreferrer">Open ${component.url}</a>`
+    : "";
+
   const startBtn = document.createElement("button");
   startBtn.textContent = "Start";
   startBtn.onclick = async () => {
-    await startComponent(appId, component.name);
+    const res = await startComponent(appId, component.name);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.url) {
+        component.url = data.url;
+      }
+    }
     refreshCurrentPage();
   };
 
   const stopBtn = document.createElement("button");
   stopBtn.textContent = "Stop";
   stopBtn.onclick = async () => {
-    await stopComponent(appId, component.name);
+    const res = await stopComponent(appId, component.name);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.url) {
+        component.url = data.url;
+      }
+    }
     refreshCurrentPage();
   };
 
-  row.innerHTML = `<span>${component.name}</span>`;
+  row.innerHTML = `<span>${component.name}</span>${browseLink}`;
   row.appendChild(startBtn);
   row.appendChild(stopBtn);
 

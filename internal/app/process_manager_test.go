@@ -55,3 +55,25 @@ func TestProcessManagerUsesConfiguredStopCommand(t *testing.T) {
 		t.Fatalf("expected stop command to run and create marker: %v", err)
 	}
 }
+
+func TestInferBrowseURL(t *testing.T) {
+	cases := []struct {
+		name      string
+		command   string
+		expected  string
+	}{
+		{name: "python http server", command: "python -m http.server 8765 --bind 127.0.0.1", expected: "http://127.0.0.1:8765"},
+		{name: "vite port flag", command: "npm run dev -- --host 0.0.0.0 --port 5173", expected: "http://localhost:5173"},
+		{name: "explicit url", command: "npx serve -l 3000", expected: "http://localhost:3000"},
+		{name: "no port", command: "python app.py", expected: ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			component := Component{Name: "Server", StartCommand: tc.command}
+			if got := InferBrowseURL(component); got != tc.expected {
+				t.Fatalf("InferBrowseURL(%q) = %q, want %q", tc.command, got, tc.expected)
+			}
+		})
+	}
+}

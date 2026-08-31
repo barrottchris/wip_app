@@ -100,6 +100,14 @@ type EntryWithConnections struct {
 
 func (s *Server) withConnections(entry app.Entry) EntryWithConnections {
 	s.runtime.ApplyTo(&entry)
+	for i := range entry.Components {
+		if entry.Components[i].URL == "" {
+			entry.Components[i].URL = app.InferBrowseURL(entry.Components[i])
+		}
+		if !entry.Components[i].Running && entry.Components[i].URL == "" {
+			entry.Components[i].URL = app.InferBrowseURL(entry.Components[i])
+		}
+	}
 
 	if gitutil.HasGit(entry.LocalPath) {
 		if branch, err := gitutil.DefaultBranch(entry.LocalPath); err == nil && branch != "" {
@@ -363,12 +371,18 @@ func (s *Server) handleAppSubroutes(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		response := map[string]interface{}{
+			"status": "ok",
+			"url":    "",
+		}
+
 		if action == "start" {
 			if err := s.processManager.Start(id, entry.LocalPath, component); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 			s.runtime.SetRunning(id, body.Component, true)
+			response["url"] = app.InferBrowseURL(component)
 		} else {
 			if err := s.processManager.Stop(id, entry.LocalPath, component); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -376,7 +390,7 @@ func (s *Server) handleAppSubroutes(w http.ResponseWriter, r *http.Request) {
 			}
 			s.runtime.SetRunning(id, body.Component, false)
 		}
-		writeJSON(w, map[string]string{"status": "ok"})
+		writeJSON(w, response)
 
 	case "archive":
 		s.handleArchiveApp(w, r, id)
