@@ -18,9 +18,10 @@ import (
 
 // Server holds shared state for HTTP handlers.
 type Server struct {
-	store       *app.Store
-	configStore *config.Store
-	runtime     *app.RuntimeTracker // live running/stopped state, never persisted — see internal/app/runtime.go
+	store         *app.Store
+	configStore   *config.Store
+	runtime       *app.RuntimeTracker // live running/stopped state, never persisted — see internal/app/runtime.go
+	processManager *app.ProcessManager
 }
 
 func main() {
@@ -41,9 +42,10 @@ func main() {
 	}
 
 	server := &Server{
-		store:       store,
-		configStore: config.NewStore(database.Conn),
-		runtime:     app.NewRuntimeTracker(),
+		store:          store,
+		configStore:    config.NewStore(database.Conn),
+		runtime:        app.NewRuntimeTracker(),
+		processManager: app.NewProcessManager(),
 	}
 
 	mux := http.NewServeMux()
@@ -336,12 +338,44 @@ func (s *Server) handleAppSubroutes(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invalid request body", http.StatusBadRequest)
 			return
 		}
-		// TODO: real process/docker execution is still a stub — but the
-		// running/stopped state itself is now tracked for real, so the UI
-		// accurately reflects what you last clicked rather than always
-		// showing the same status.
-		s.runtime.SetRunning(id, body.Component, action == "start")
-		fmt.Printf("TODO: %s component %q for app %q\n", action, body.Component, id)
+		if body.Component == "" {
+			http.Error(w, "component is required", http.StatusBadRequest)
+			return
+		}
+
+		entry, err := s.store.GetApp(id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+
+		var component app.Component
+		found := false
+		for i := range entry.Components {
+			if entry.Components[i].Name == body.Component {
+				component = entry.Components[i]
+				found = true
+				break
+			}
+		}
+		if !found {
+			http.Error(w, fmt.Sprintf("component %q not found", body.Component), http.StatusNotFound)
+			return
+		}
+
+		if action == "start" {
+			if err := s.processManager.Start(id, entry.LocalPath, component); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			s.runtime.SetRunning(id, body.Component, true)
+		} else {
+			if err := s.processManager.Stop(id, entry.LocalPath, component); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			s.runtime.SetRunning(id, body.Component, false)
+		}
 		writeJSON(w, map[string]string{"status": "ok"})
 
 	case "archive":
