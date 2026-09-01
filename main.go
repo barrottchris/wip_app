@@ -6,7 +6,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"wip/internal/app"
@@ -295,6 +297,25 @@ func (s *Server) handleGitRefresh(w http.ResponseWriter, r *http.Request, id str
 	writeJSON(w, s.withConnections(updated))
 }
 
+func openComponentTerminal(appPath string, component app.Component) error {
+	if appPath == "" {
+		return fmt.Errorf("component path is required")
+	}
+	if strings.TrimSpace(component.StartCommand) == "" {
+		return fmt.Errorf("component %q has no start command", component.Name)
+	}
+	cmd := exec.Command(
+		"cmd.exe",
+		"/C",
+		"start",
+		"",
+		"cmd.exe",
+		"/K",
+		fmt.Sprintf("cd /d \"%s\" && %s", appPath, component.StartCommand),
+	)
+	return cmd.Run()
+}
+
 // handleAppSubroutes is a very simple manual router for MVP purposes.
 // TODO: swap for a real router (chi, gorilla/mux, or Go 1.22's enhanced
 // http.ServeMux patterns) once routes grow beyond a handful.
@@ -343,7 +364,7 @@ func (s *Server) handleAppSubroutes(w http.ResponseWriter, r *http.Request) {
 	case "git-refresh":
 		s.handleGitRefresh(w, r, id)
 
-	case "start", "stop":
+	case "start", "stop", "terminal":
 		var body struct {
 			Component string `json:"component"`
 		}
@@ -373,6 +394,15 @@ func (s *Server) handleAppSubroutes(w http.ResponseWriter, r *http.Request) {
 		}
 		if !found {
 			http.Error(w, fmt.Sprintf("component %q not found", body.Component), http.StatusNotFound)
+			return
+		}
+
+		if action == "terminal" {
+			if err := openComponentTerminal(entry.LocalPath, component); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			writeJSON(w, map[string]string{"status": "ok", "command": component.StartCommand})
 			return
 		}
 
