@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -67,6 +68,40 @@ func TestProcessManagerRejectsMissingAppDirectory(t *testing.T) {
 	if err := pm.Start("missing-dir", filepath.Join(t.TempDir(), "ghost-project"), component); err == nil {
 		t.Fatal("expected start to fail when app directory does not exist")
 	}
+}
+
+func TestProcessManagerCapturesEarlyExitOutput(t *testing.T) {
+	pm := NewProcessManager()
+	tempDir := t.TempDir()
+	scriptPath := filepath.Join(tempDir, "exit_script.py")
+	script := "import sys\nprint(\"hello stdout\")\nsys.stderr.write(\"hello stderr\\n\")\nraise SystemExit(3)\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o600); err != nil {
+		t.Fatalf("write temp script: %v", err)
+	}
+
+	component := Component{
+		Name:         "App",
+		StartCommand: "python exit_script.py",
+		RunMode:      RunModeNative,
+	}
+
+	if err := pm.Start("app-logs", tempDir, component); err != nil {
+		t.Fatalf("start process: %v", err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		logs := pm.GetComponentLogs("app-logs", "App")
+		if len(logs) > 0 {
+			joined := strings.Join(logs, "\n")
+			if strings.Contains(joined, "hello stdout") && strings.Contains(joined, "hello stderr") {
+				return
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	t.Fatalf("expected captured stdout/stderr from early-exit process, got logs: %#v", pm.GetComponentLogs("app-logs", "App"))
 }
 
 func TestInferBrowseURL(t *testing.T) {

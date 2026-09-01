@@ -90,7 +90,7 @@ export async function renderAppDetailPage(container) {
   (entry.components || []).forEach((component) => addComponentRow(componentRowsEl, component));
 
   wrapper.querySelector("#add-component-btn").addEventListener("click", () => {
-    addComponentRow(componentRowsEl, { name: "", buildCommands: [], runCommand: "", stopCommand: "", runMode: "native" });
+    addComponentRow(componentRowsEl, { name: "", buildCommands: [], startCommand: "", stopCommand: "", runMode: "native" });
   });
 
   wrapper.querySelector("#save-components-btn").addEventListener("click", async () => {

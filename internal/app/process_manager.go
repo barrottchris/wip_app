@@ -32,9 +32,12 @@ func (w *processLogWriter) Write(p []byte) (int, error) {
 // ProcessSession holds a real OS process plus its captured output so the portal
 // can display terminal-like log output and react to termination.
 type ProcessSession struct {
-	mu   sync.Mutex
-	cmd  *exec.Cmd
-	logs []string
+	mu          sync.Mutex
+	cmd         *exec.Cmd
+	logs        []string
+	lastError   string
+	lastExitErr error
+	exited      bool
 }
 
 func (s *ProcessSession) appendLog(msg string) {
@@ -58,6 +61,40 @@ func (s *ProcessSession) snapshotLogs() []string {
 	out := make([]string, len(s.logs))
 	copy(out, s.logs)
 	return out
+}
+
+func (s *ProcessSession) setExitError(err error) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.lastExitErr = err
+	s.exited = true
+	if err != nil {
+		s.lastError = err.Error()
+		if !strings.Contains(strings.Join(s.logs, "\n"), s.lastError) {
+			s.logs = append(s.logs, s.lastError)
+		}
+	}
+}
+
+func (s *ProcessSession) getLastError() string {
+	if s == nil {
+		return ""
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.lastError
+}
+
+func (s *ProcessSession) hasExited() bool {
+	if s == nil {
+		return true
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.exited
 }
 
 // InferBrowseURL derives a likely local browse URL for a component from the
@@ -151,9 +188,9 @@ func parsePort(value string) (string, bool) {
 // This is separate from RuntimeTracker: the tracker reflects UI-visible
 // running state, while the process manager owns the actual OS process handles.
 type ProcessManager struct {
-	mu           sync.Mutex
-	procs        map[string]map[string]*ProcessSession
-	stopped      map[string]map[string]bool
+	mu            sync.Mutex
+	procs         map[string]map[string]*ProcessSession
+	stopped       map[string]map[string]bool
 	onStateChange func(appID, component string, running bool)
 }
 
@@ -190,6 +227,9 @@ func (pm *ProcessManager) IsRunning(appID, component string) bool {
 	if session == nil || session.cmd == nil || session.cmd.Process == nil {
 		return false
 	}
+	if session.hasExited() {
+		return false
+	}
 	if session.cmd.ProcessState != nil && session.cmd.ProcessState.Exited() {
 		return false
 	}
@@ -215,18 +255,14 @@ func (pm *ProcessManager) Start(appID, appPath string, component Component) erro
 
 	cmd := buildCommand(component.RunMode, component.StartCommand)
 	cmd.Dir = appPath
-	logger := &processLogWriter{session: &ProcessSession{cmd: cmd}}
-	cmd.Stdout = logger
-	cmd.Stderr = logger
-
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("starting %q: %w", component.Name, err)
-	}
-
 	session := &ProcessSession{cmd: cmd}
 	session.appendLog(fmt.Sprintf("starting %s", component.Name))
 	cmd.Stdout = &processLogWriter{session: session}
 	cmd.Stderr = &processLogWriter{session: session}
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("starting %q: %w", component.Name, err)
+	}
 
 	pm.mu.Lock()
 	if pm.procs[appID] == nil {
@@ -245,15 +281,13 @@ func (pm *ProcessManager) Start(appID, appPath string, component Component) erro
 
 	go func() {
 		if err := cmd.Wait(); err != nil {
+			session.setExitError(err)
 			session.appendLog(fmt.Sprintf("process exited: %v", err))
+		} else {
+			session.mu.Lock()
+			session.exited = true
+			session.mu.Unlock()
 		}
-		pm.mu.Lock()
-		if pm.procs[appID] != nil {
-			if pm.procs[appID][component.Name] == session {
-				delete(pm.procs[appID], component.Name)
-			}
-		}
-		pm.mu.Unlock()
 		if pm.onStateChange != nil {
 			pm.onStateChange(appID, component.Name, false)
 		}
@@ -356,4 +390,17 @@ func (pm *ProcessManager) GetComponentLogs(appID, component string) []string {
 		return nil
 	}
 	return session.snapshotLogs()
+}
+
+func (pm *ProcessManager) GetComponentLastError(appID, component string) string {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	if pm.procs[appID] == nil {
+		return ""
+	}
+	session := pm.procs[appID][component]
+	if session == nil {
+		return ""
+	}
+	return session.getLastError()
 }

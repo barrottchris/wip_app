@@ -18,7 +18,7 @@ export function addComponentRow(containerEl, component) {
     <button type="button" class="add-build-cmd-btn">+ Add build command</button>
 
     <label>Run command</label>
-    <input type="text" class="comp-run" placeholder="Command that starts and keeps this running" value="${escapeAttr(component.runCommand)}" />
+    <input type="text" class="comp-run" placeholder="Command that starts and keeps this running" value="${escapeAttr(component.startCommand || component.runCommand || "")}" />
 
     <label>Stop command</label>
     <input type="text" class="comp-stop" placeholder="Command to stop it" value="${escapeAttr(component.stopCommand)}" />
@@ -67,7 +67,7 @@ export function readComponentsFromDOM(containerEl) {
     buildCommands: Array.from(block.querySelectorAll(".build-cmd-input"))
       .map((i) => i.value.trim())
       .filter((v) => v),
-    runCommand: block.querySelector(".comp-run").value.trim(),
+    startCommand: block.querySelector(".comp-run").value.trim(),
     stopCommand: block.querySelector(".comp-stop").value.trim(),
     runMode: block.querySelector(".comp-runmode").value,
   }));

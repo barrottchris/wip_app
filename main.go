@@ -376,6 +376,7 @@ func (s *Server) handleAppSubroutes(w http.ResponseWriter, r *http.Request) {
 		response := map[string]interface{}{
 			"status": "ok",
 			"url":    "",
+			"logs":   []string{},
 		}
 
 		if action == "start" {
@@ -385,12 +386,14 @@ func (s *Server) handleAppSubroutes(w http.ResponseWriter, r *http.Request) {
 			}
 			s.runtime.SetRunning(id, body.Component, true)
 			response["url"] = app.InferBrowseURL(component)
+			response["logs"] = s.processManager.GetComponentLogs(id, body.Component)
 		} else {
 			if err := s.processManager.Stop(id, entry.LocalPath, component); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 			s.runtime.SetRunning(id, body.Component, false)
+			response["logs"] = s.processManager.GetComponentLogs(id, body.Component)
 		}
 		writeJSON(w, response)
 
