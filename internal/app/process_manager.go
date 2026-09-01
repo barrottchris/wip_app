@@ -79,6 +79,17 @@ func (s *ProcessSession) setExitError(err error) {
 	}
 }
 
+func (s *ProcessSession) addDiagnostic(message string) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !strings.Contains(strings.Join(s.logs, "\n"), message) {
+		s.logs = append(s.logs, message)
+	}
+}
+
 func (s *ProcessSession) getLastError() string {
 	if s == nil {
 		return ""
@@ -283,11 +294,17 @@ func (pm *ProcessManager) Start(appID, appPath string, component Component) erro
 		if err := cmd.Wait(); err != nil {
 			session.setExitError(err)
 			session.appendLog(fmt.Sprintf("process exited: %v", err))
+			if len(session.snapshotLogs()) <= 2 {
+				session.addDiagnostic("no stdout/stderr was emitted before the process exited")
+			}
 		} else {
 			session.mu.Lock()
 			session.exited = true
 			session.mu.Unlock()
 		}
+		session.mu.Lock()
+		session.exited = true
+		session.mu.Unlock()
 		if pm.onStateChange != nil {
 			pm.onStateChange(appID, component.Name, false)
 		}
