@@ -103,22 +103,8 @@ function renderComponentRow(appId, component) {
     infoWrap.appendChild(link);
   }
 
-  const logs = Array.isArray(component.logs) ? component.logs.slice(-4) : [];
-  if (logs.length > 0) {
-    const logBlock = document.createElement("div");
-    logBlock.className = "component-logs";
-    const logTitle = document.createElement("div");
-    logTitle.className = "component-logs-title";
-    logTitle.textContent = "Output";
-    logBlock.appendChild(logTitle);
-    logs.forEach((entry) => {
-      const line = document.createElement("div");
-      line.className = "component-log-line";
-      line.textContent = entry;
-      logBlock.appendChild(line);
-    });
-    row.appendChild(logBlock);
-  }
+  const buttonsWrap = document.createElement("div");
+  buttonsWrap.className = "component-actions";
 
   const startBtn = document.createElement("button");
   startBtn.textContent = "Start";
@@ -131,9 +117,7 @@ function renderComponentRow(appId, component) {
     }
 
     const data = await res.json();
-    if (data && data.url) {
-      component.url = data.url;
-    }
+    if (data && data.url) component.url = data.url;
     refreshCurrentPage();
   };
 
@@ -146,6 +130,7 @@ function renderComponentRow(appId, component) {
       alert(`Could not open terminal for ${component.name}: ${text || "unknown server error"}`);
       return;
     }
+    refreshCurrentPage();
   };
 
   const stopBtn = document.createElement("button");
@@ -159,16 +144,46 @@ function renderComponentRow(appId, component) {
     }
 
     const data = await res.json();
-    if (data && data.url) {
-      component.url = data.url;
-    }
+    if (data && data.url) component.url = data.url;
     refreshCurrentPage();
   };
 
+  buttonsWrap.appendChild(startBtn);
+  buttonsWrap.appendChild(terminalBtn);
+  buttonsWrap.appendChild(stopBtn);
+
+  const logs = Array.isArray(component.logs) ? component.logs.slice(-8) : [];
+  if (logs.length > 0 || component.running) {
+    const rightSide = document.createElement("div");
+    rightSide.className = "component-right-panel";
+
+    const header = document.createElement("div");
+    header.className = "component-status-header";
+    header.textContent = component.running ? "Running" : "Last output";
+    rightSide.appendChild(header);
+
+    if (logs.length > 0) {
+      const logBlock = document.createElement("div");
+      logBlock.className = "component-logs";
+      logs.forEach((entry) => {
+        const line = document.createElement("div");
+        line.className = "component-log-line";
+        line.textContent = entry;
+        logBlock.appendChild(line);
+      });
+      rightSide.appendChild(logBlock);
+    } else if (component.running) {
+      const idle = document.createElement("div");
+      idle.className = "component-log-line muted";
+      idle.textContent = "Process is running with no output yet.";
+      rightSide.appendChild(idle);
+    }
+
+    row.appendChild(rightSide);
+  }
+
   row.appendChild(infoWrap);
-  row.appendChild(startBtn);
-  row.appendChild(terminalBtn);
-  row.appendChild(stopBtn);
+  row.appendChild(buttonsWrap);
 
   return row;
 }

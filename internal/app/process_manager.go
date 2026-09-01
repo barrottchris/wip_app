@@ -417,6 +417,26 @@ func buildCommand(runMode RunMode, command string) *exec.Cmd {
 	return exec.Command("cmd", "/C", command)
 }
 
+// BuildTerminalCommand creates the Windows command line used to open an
+// interactive terminal in the target app directory for a component.
+func BuildTerminalCommand(appPath string, component Component) string {
+	appPath = strings.TrimSpace(appPath)
+	command := strings.TrimSpace(component.StartCommand)
+	if appPath == "" {
+		return command
+	}
+	if command == "" {
+		return fmt.Sprintf("cd /d \"%s\"", appPath)
+	}
+	return fmt.Sprintf("start \"%s\" cmd.exe /K " +
+		"cd /d \"%s\" && title %s && %s",
+		component.Name,
+		appPath,
+		component.Name,
+		command,
+	)
+}
+
 // terminateProcessTree kills the tracked process and its children on Windows using taskkill.
 func terminateProcessTree(cmd *exec.Cmd) error {
 	if cmd == nil || cmd.Process == nil {

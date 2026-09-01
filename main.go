@@ -304,15 +304,8 @@ func openComponentTerminal(appPath string, component app.Component) error {
 	if strings.TrimSpace(component.StartCommand) == "" {
 		return fmt.Errorf("component %q has no start command", component.Name)
 	}
-	cmd := exec.Command(
-		"cmd.exe",
-		"/C",
-		"start",
-		"",
-		"cmd.exe",
-		"/K",
-		fmt.Sprintf("cd /d \"%s\" && %s", appPath, component.StartCommand),
-	)
+	cmdLine := app.BuildTerminalCommand(appPath, component)
+	cmd := exec.Command("cmd.exe", "/C", cmdLine)
 	return cmd.Run()
 }
 

@@ -137,3 +137,18 @@ func TestInferBrowseURL(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildTerminalCommandUsesAppDirectoryAndComponentName(t *testing.T) {
+	appPath := `C:\work\demo-app`
+	cmd := BuildTerminalCommand(appPath, Component{Name: "Frontend", StartCommand: "npm run dev"})
+
+	if !strings.Contains(cmd, `cd /d "C:\work\demo-app"`) {
+		t.Fatalf("terminal command should cd into app directory, got %q", cmd)
+	}
+	if !strings.Contains(cmd, "title Frontend") {
+		t.Fatalf("terminal command should set the title to the component name, got %q", cmd)
+	}
+	if !strings.Contains(cmd, "npm run dev") {
+		t.Fatalf("terminal command should include the start command, got %q", cmd)
+	}
+}
