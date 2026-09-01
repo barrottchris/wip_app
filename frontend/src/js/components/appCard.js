@@ -86,19 +86,53 @@ function renderComponentRow(appId, component) {
   const row = document.createElement("div");
   row.className = "component-row";
 
-  const browseLink = component.running && component.url
-    ? `<a class="component-url" href="${component.url}" target="_blank" rel="noreferrer">Open ${component.url}</a>`
-    : "";
+  const infoWrap = document.createElement("div");
+  infoWrap.className = "component-info";
+
+  const nameEl = document.createElement("span");
+  nameEl.textContent = component.name;
+  infoWrap.appendChild(nameEl);
+
+  if (component.running && component.url) {
+    const link = document.createElement("a");
+    link.className = "component-url";
+    link.href = component.url;
+    link.target = "_blank";
+    link.rel = "noreferrer";
+    link.textContent = `Open ${component.url}`;
+    infoWrap.appendChild(link);
+  }
+
+  const logs = Array.isArray(component.logs) ? component.logs.slice(-4) : [];
+  if (logs.length > 0) {
+    const logBlock = document.createElement("div");
+    logBlock.className = "component-logs";
+    const logTitle = document.createElement("div");
+    logTitle.className = "component-logs-title";
+    logTitle.textContent = "Output";
+    logBlock.appendChild(logTitle);
+    logs.forEach((entry) => {
+      const line = document.createElement("div");
+      line.className = "component-log-line";
+      line.textContent = entry;
+      logBlock.appendChild(line);
+    });
+    row.appendChild(logBlock);
+  }
 
   const startBtn = document.createElement("button");
   startBtn.textContent = "Start";
   startBtn.onclick = async () => {
     const res = await startComponent(appId, component.name);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.url) {
-        component.url = data.url;
-      }
+    if (!res.ok) {
+      const text = await res.text();
+      alert(`Could not start ${component.name}: ${text || "unknown server error"}`);
+      return;
+    }
+
+    const data = await res.json();
+    if (data && data.url) {
+      component.url = data.url;
     }
     refreshCurrentPage();
   };
@@ -107,16 +141,20 @@ function renderComponentRow(appId, component) {
   stopBtn.textContent = "Stop";
   stopBtn.onclick = async () => {
     const res = await stopComponent(appId, component.name);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.url) {
-        component.url = data.url;
-      }
+    if (!res.ok) {
+      const text = await res.text();
+      alert(`Could not stop ${component.name}: ${text || "unknown server error"}`);
+      return;
+    }
+
+    const data = await res.json();
+    if (data && data.url) {
+      component.url = data.url;
     }
     refreshCurrentPage();
   };
 
-  row.innerHTML = `<span>${component.name}</span>${browseLink}`;
+  row.appendChild(infoWrap);
   row.appendChild(startBtn);
   row.appendChild(stopBtn);
 

@@ -27,13 +27,14 @@ const (
 
 // Component is a single runnable unit within an app (e.g. "Frontend", "Backend").
 type Component struct {
-	Name         string  `json:"name"`
-	StartCommand string  `json:"startCommand"`
-	StopCommand  string  `json:"stopCommand"`
-	RunMode      RunMode `json:"runMode"`
-	// Running and URL are computed at runtime, not persisted.
-	Running bool   `json:"running"`
-	URL     string `json:"url,omitempty"`
+	Name         string   `json:"name"`
+	StartCommand string   `json:"startCommand"`
+	StopCommand  string   `json:"stopCommand"`
+	RunMode      RunMode  `json:"runMode"`
+	// Running, URL, and Logs are computed at runtime, not persisted.
+	Running bool     `json:"running"`
+	URL     string   `json:"url,omitempty"`
+	Logs    []string `json:"logs,omitempty"`
 }
 
 // Branch reflects a git branch discovered for an app's repo.

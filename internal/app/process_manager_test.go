@@ -56,6 +56,19 @@ func TestProcessManagerUsesConfiguredStopCommand(t *testing.T) {
 	}
 }
 
+func TestProcessManagerRejectsMissingAppDirectory(t *testing.T) {
+	pm := NewProcessManager()
+	component := Component{
+		Name:         "App",
+		StartCommand: "npm start",
+		RunMode:      RunModeNative,
+	}
+
+	if err := pm.Start("missing-dir", filepath.Join(t.TempDir(), "ghost-project"), component); err == nil {
+		t.Fatal("expected start to fail when app directory does not exist")
+	}
+}
+
 func TestInferBrowseURL(t *testing.T) {
 	cases := []struct {
 		name      string

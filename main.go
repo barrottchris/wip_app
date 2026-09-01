@@ -41,11 +41,12 @@ func main() {
 		log.Fatalf("failed to seed initial data: %v", err)
 	}
 
+	runtime := app.NewRuntimeTracker()
 	server := &Server{
 		store:          store,
 		configStore:    config.NewStore(database.Conn),
-		runtime:        app.NewRuntimeTracker(),
-		processManager: app.NewProcessManager(),
+		runtime:        runtime,
+		processManager: app.NewProcessManager(runtime.SetRunning),
 	}
 
 	mux := http.NewServeMux()
@@ -104,6 +105,7 @@ func (s *Server) withConnections(entry app.Entry) EntryWithConnections {
 		if entry.Components[i].URL == "" {
 			entry.Components[i].URL = app.InferBrowseURL(entry.Components[i])
 		}
+		entry.Components[i].Logs = s.processManager.GetComponentLogs(entry.ID, entry.Components[i].Name)
 		if !entry.Components[i].Running && entry.Components[i].URL == "" {
 			entry.Components[i].URL = app.InferBrowseURL(entry.Components[i])
 		}

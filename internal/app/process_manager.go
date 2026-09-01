@@ -2,11 +2,63 @@ package app
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
 )
+
+// processLogWriter captures command output so the portal can show a live
+// terminal-like log, not just a boolean running flag.
+type processLogWriter struct {
+	session *ProcessSession
+}
+
+func (w *processLogWriter) Write(p []byte) (int, error) {
+	if w == nil || w.session == nil {
+		return len(p), nil
+	}
+	for _, line := range strings.Split(strings.TrimRight(string(p), "\r\n"), "\n") {
+		msg := strings.TrimSpace(line)
+		if msg == "" {
+			continue
+		}
+		w.session.appendLog(msg)
+	}
+	return len(p), nil
+}
+
+// ProcessSession holds a real OS process plus its captured output so the portal
+// can display terminal-like log output and react to termination.
+type ProcessSession struct {
+	mu   sync.Mutex
+	cmd  *exec.Cmd
+	logs []string
+}
+
+func (s *ProcessSession) appendLog(msg string) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.logs) >= 200 {
+		s.logs = append([]string(nil), s.logs[len(s.logs)-199:]...)
+	}
+	s.logs = append(s.logs, msg)
+}
+
+func (s *ProcessSession) snapshotLogs() []string {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]string, len(s.logs))
+	copy(out, s.logs)
+	return out
+}
 
 // InferBrowseURL derives a likely local browse URL for a component from the
 // start command. This is intentionally heuristic: many dev servers listen on a
@@ -99,16 +151,31 @@ func parsePort(value string) (string, bool) {
 // This is separate from RuntimeTracker: the tracker reflects UI-visible
 // running state, while the process manager owns the actual OS process handles.
 type ProcessManager struct {
-	mu     sync.Mutex
-	procs  map[string]map[string]*exec.Cmd
-	stopped map[string]map[string]bool
+	mu           sync.Mutex
+	procs        map[string]map[string]*ProcessSession
+	stopped      map[string]map[string]bool
+	onStateChange func(appID, component string, running bool)
 }
 
 // NewProcessManager creates an in-memory manager for live app component processes.
-func NewProcessManager() *ProcessManager {
+// It accepts an optional callback so a caller can bind runtime state changes to
+// the portal's own tracker when a process starts or exits.
+func NewProcessManager(onStateChange ...func(appID, component string, running bool)) *ProcessManager {
+	var hook func(appID, component string, running bool)
+	if len(onStateChange) > 0 {
+		hook = onStateChange[0]
+	}
+	return NewProcessManagerWithHook(hook)
+}
+
+// NewProcessManagerWithHook adds a callback that fires when a component's live
+// process state changes, so the portal can keep its running status in sync with
+// the actual OS process lifecycle.
+func NewProcessManagerWithHook(onStateChange func(appID, component string, running bool)) *ProcessManager {
 	return &ProcessManager{
-		procs:   make(map[string]map[string]*exec.Cmd),
-		stopped: make(map[string]map[string]bool),
+		procs:         make(map[string]map[string]*ProcessSession),
+		stopped:       make(map[string]map[string]bool),
+		onStateChange: onStateChange,
 	}
 }
 
@@ -119,17 +186,19 @@ func (pm *ProcessManager) IsRunning(appID, component string) bool {
 	if pm.procs[appID] == nil {
 		return false
 	}
-	cmd := pm.procs[appID][component]
-	if cmd == nil || cmd.Process == nil {
+	session := pm.procs[appID][component]
+	if session == nil || session.cmd == nil || session.cmd.Process == nil {
 		return false
 	}
-	if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
+	if session.cmd.ProcessState != nil && session.cmd.ProcessState.Exited() {
 		return false
 	}
 	return true
 }
 
-// Start launches a component in the app's local directory and records the running process handle.
+// Start launches a component in the app's local directory and records the live
+// process session with its log output so the portal can display a console-like
+// stream and react when the process exits.
 func (pm *ProcessManager) Start(appID, appPath string, component Component) error {
 	if appID == "" || component.Name == "" {
 		return fmt.Errorf("app id and component name are required")
@@ -137,61 +206,98 @@ func (pm *ProcessManager) Start(appID, appPath string, component Component) erro
 	if component.StartCommand == "" {
 		return fmt.Errorf("component %q has no start command", component.Name)
 	}
+	if _, err := os.Stat(appPath); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("app directory %q does not exist: %w", appPath, err)
+		}
+		return fmt.Errorf("checking app directory %q: %w", appPath, err)
+	}
 
 	cmd := buildCommand(component.RunMode, component.StartCommand)
 	cmd.Dir = appPath
+	logger := &processLogWriter{session: &ProcessSession{cmd: cmd}}
+	cmd.Stdout = logger
+	cmd.Stderr = logger
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("starting %q: %w", component.Name, err)
 	}
 
+	session := &ProcessSession{cmd: cmd}
+	session.appendLog(fmt.Sprintf("starting %s", component.Name))
+	cmd.Stdout = &processLogWriter{session: session}
+	cmd.Stderr = &processLogWriter{session: session}
+
 	pm.mu.Lock()
 	if pm.procs[appID] == nil {
-		pm.procs[appID] = make(map[string]*exec.Cmd)
+		pm.procs[appID] = make(map[string]*ProcessSession)
 	}
 	if pm.stopped[appID] == nil {
 		pm.stopped[appID] = make(map[string]bool)
 	}
-	pm.procs[appID][component.Name] = cmd
+	pm.procs[appID][component.Name] = session
 	pm.stopped[appID][component.Name] = false
 	pm.mu.Unlock()
+
+	if pm.onStateChange != nil {
+		pm.onStateChange(appID, component.Name, true)
+	}
+
+	go func() {
+		if err := cmd.Wait(); err != nil {
+			session.appendLog(fmt.Sprintf("process exited: %v", err))
+		}
+		pm.mu.Lock()
+		if pm.procs[appID] != nil {
+			if pm.procs[appID][component.Name] == session {
+				delete(pm.procs[appID], component.Name)
+			}
+		}
+		pm.mu.Unlock()
+		if pm.onStateChange != nil {
+			pm.onStateChange(appID, component.Name, false)
+		}
+	}()
+
 	return nil
 }
 
 // Stop shuts down a component using its explicit stop command when available, then falls back to terminating the tracked process tree.
 func (pm *ProcessManager) Stop(appID, appPath string, component Component) error {
 	pm.mu.Lock()
-	cmd := pm.procs[appID][component.Name]
+	session := pm.procs[appID][component.Name]
 	pm.mu.Unlock()
 
 	if component.StopCommand != "" {
 		stopCmd := buildCommand(component.RunMode, component.StopCommand)
 		stopCmd.Dir = appPath
 		if err := stopCmd.Run(); err != nil {
-			// A configured stop command is authoritative for app-specific shutdown.
-			// If it fails, we still try to clean up the tracked process tree below.
-			// This preserves the app's own shutdown semantics without leaving the
-			// backend in a stale running state.
 			fmt.Printf("stop command for %q failed: %v\n", component.Name, err)
 		}
 	}
 
-	if cmd == nil || cmd.Process == nil {
+	if session == nil || session.cmd == nil || session.cmd.Process == nil {
 		pm.mu.Lock()
 		if pm.procs[appID] != nil {
 			delete(pm.procs[appID], component.Name)
 		}
 		pm.mu.Unlock()
+		if pm.onStateChange != nil {
+			pm.onStateChange(appID, component.Name, false)
+		}
 		return nil
 	}
 
-	if err := terminateProcessTree(cmd); err != nil {
+	if err := terminateProcessTree(session.cmd); err != nil {
 		if strings.Contains(err.Error(), "exit status 128") || strings.Contains(err.Error(), "not found") {
 			pm.mu.Lock()
 			if pm.procs[appID] != nil {
 				delete(pm.procs[appID], component.Name)
 			}
 			pm.mu.Unlock()
+			if pm.onStateChange != nil {
+				pm.onStateChange(appID, component.Name, false)
+			}
 			return nil
 		}
 		return err
@@ -205,6 +311,9 @@ func (pm *ProcessManager) Stop(appID, appPath string, component Component) error
 		pm.stopped[appID][component.Name] = true
 	}
 	pm.mu.Unlock()
+	if pm.onStateChange != nil {
+		pm.onStateChange(appID, component.Name, false)
+	}
 	return nil
 }
 
@@ -233,4 +342,18 @@ func terminateProcessTree(cmd *exec.Cmd) error {
 		return fmt.Errorf("taskkill for pid %s: %w", pid, err)
 	}
 	return nil
+}
+
+// GetComponentLogs returns the captured console output for a component, if any.
+func (pm *ProcessManager) GetComponentLogs(appID, component string) []string {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	if pm.procs[appID] == nil {
+		return nil
+	}
+	session := pm.procs[appID][component]
+	if session == nil {
+		return nil
+	}
+	return session.snapshotLogs()
 }

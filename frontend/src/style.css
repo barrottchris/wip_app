@@ -122,15 +122,48 @@ body {
   flex-wrap: wrap;
 }
 
+.component-info {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
 .component-url {
   color: #8ab4f8;
   text-decoration: none;
   font-size: 0.78rem;
-  margin-right: auto;
 }
 
 .component-url:hover {
   text-decoration: underline;
+}
+
+.component-logs {
+  width: 100%;
+  margin-top: 0.35rem;
+  background: #1f1f1f;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  padding: 0.45rem 0.5rem;
+  font-size: 0.72rem;
+  color: #cfe3ff;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.component-logs-title {
+  color: #9ab3d9;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.component-log-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.9;
 }
 
 button {
