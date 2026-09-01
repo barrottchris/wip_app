@@ -64,6 +64,10 @@ export function startComponent(appId, componentName) {
   return postComponentAction(appId, "start", componentName);
 }
 
+export function openComponentTerminal(appId, componentName) {
+  return postComponentAction(appId, "terminal", componentName);
+}
+
 export function stopComponent(appId, componentName) {
   return postComponentAction(appId, "stop", componentName);
 }

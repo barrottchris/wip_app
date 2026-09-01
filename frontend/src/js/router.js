@@ -6,18 +6,9 @@
 
 let pages = {};
 let currentPageName = null;
-let liveRefreshTimer = null;
 
 export function setPages(pageMap) {
   pages = pageMap;
-}
-
-function startLiveRefresh() {
-  if (liveRefreshTimer) return;
-  liveRefreshTimer = setInterval(() => {
-    if (!currentPageName) return;
-    refreshCurrentPage();
-  }, 1500);
 }
 
 // Which app the detail/git/edit pages are currently showing — set by
@@ -34,7 +25,6 @@ export function navigateTo(pageName) {
   content.innerHTML = "";
   const renderFn = pages[pageName] || pages["registry"];
   renderFn(content);
-  startLiveRefresh();
 }
 
 // Re-render whatever page is currently showing — used after an action

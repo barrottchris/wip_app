@@ -104,11 +104,23 @@ func TestProcessManagerCapturesEarlyExitOutput(t *testing.T) {
 	t.Fatalf("expected captured stdout/stderr from early-exit process, got logs: %#v", pm.GetComponentLogs("app-logs", "App"))
 }
 
+func TestInferBrowseURLFromLogs(t *testing.T) {
+	logs := []string{
+		"Starting app...",
+		"Local:   http://localhost:3000",
+		"Network: http://0.0.0.0:3000",
+	}
+
+	if got := InferBrowseURLFromLogs(logs); got != "http://localhost:3000" {
+		t.Fatalf("InferBrowseURLFromLogs() = %q, want %q", got, "http://localhost:3000")
+	}
+}
+
 func TestInferBrowseURL(t *testing.T) {
 	cases := []struct {
-		name      string
-		command   string
-		expected  string
+		name     string
+		command  string
+		expected string
 	}{
 		{name: "python http server", command: "python -m http.server 8765 --bind 127.0.0.1", expected: "http://127.0.0.1:8765"},
 		{name: "vite port flag", command: "npm run dev -- --host 0.0.0.0 --port 5173", expected: "http://localhost:5173"},

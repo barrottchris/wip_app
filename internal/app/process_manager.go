@@ -158,6 +158,42 @@ func InferBrowseURL(component Component) string {
 	return ""
 }
 
+func InferBrowseURLFromLogs(logs []string) string {
+	for _, line := range logs {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if idx := strings.Index(trimmed, "http://"); idx >= 0 {
+			if url, ok := readURLToken(trimmed[idx:]); ok {
+				return url
+			}
+		}
+		if idx := strings.Index(trimmed, "https://"); idx >= 0 {
+			if url, ok := readURLToken(trimmed[idx:]); ok {
+				return url
+			}
+		}
+	}
+	return ""
+}
+
+func readURLToken(value string) (string, bool) {
+	trimmed := strings.TrimSpace(value)
+	for _, end := range []string{" ", "\n", "\t", "\"", "'", ")", "]", "}"} {
+		if idx := strings.Index(trimmed, end); idx >= 0 {
+			trimmed = trimmed[:idx]
+		}
+	}
+	if trimmed == "" {
+		return "", false
+	}
+	if strings.HasPrefix(trimmed, "http://") || strings.HasPrefix(trimmed, "https://") {
+		return trimmed, true
+	}
+	return "", false
+}
+
 func extractPort(value string) string {
 	parts := strings.Fields(value)
 	for i, part := range parts {
@@ -407,6 +443,22 @@ func (pm *ProcessManager) GetComponentLogs(appID, component string) []string {
 		return nil
 	}
 	return session.snapshotLogs()
+}
+
+func (pm *ProcessManager) GetComponentURL(appID, component string) string {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	if pm.procs[appID] == nil {
+		return ""
+	}
+	session := pm.procs[appID][component]
+	if session == nil {
+		return ""
+	}
+	if url := InferBrowseURLFromLogs(session.snapshotLogs()); url != "" {
+		return url
+	}
+	return ""
 }
 
 func (pm *ProcessManager) GetComponentLastError(appID, component string) string {

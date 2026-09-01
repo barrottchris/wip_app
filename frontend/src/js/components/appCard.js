@@ -1,5 +1,5 @@
 import { capitalize } from "../utils.js";
-import { gitRefresh, startComponent, stopComponent } from "../api.js";
+import { gitRefresh, openComponentTerminal, startComponent, stopComponent } from "../api.js";
 import { openAppDetail, openGitPage, refreshCurrentPage } from "../router.js";
 
 export function renderAppCard(entry) {
@@ -137,6 +137,17 @@ function renderComponentRow(appId, component) {
     refreshCurrentPage();
   };
 
+  const terminalBtn = document.createElement("button");
+  terminalBtn.textContent = "Terminal";
+  terminalBtn.onclick = async () => {
+    const res = await openComponentTerminal(appId, component.name);
+    if (!res.ok) {
+      const text = await res.text();
+      alert(`Could not open terminal for ${component.name}: ${text || "unknown server error"}`);
+      return;
+    }
+  };
+
   const stopBtn = document.createElement("button");
   stopBtn.textContent = "Stop";
   stopBtn.onclick = async () => {
@@ -156,6 +167,7 @@ function renderComponentRow(appId, component) {
 
   row.appendChild(infoWrap);
   row.appendChild(startBtn);
+  row.appendChild(terminalBtn);
   row.appendChild(stopBtn);
 
   return row;
