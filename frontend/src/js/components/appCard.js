@@ -195,6 +195,8 @@ function createTerminalPanel(card, appId, component) {
       alert(`Could not open terminal for ${component.name}: ${text || "unknown server error"}`);
       return;
     }
+    const terminal = window.open(`/terminal.html?app=${encodeURIComponent(appId)}&component=${encodeURIComponent(component.name)}`, "wip-terminal", "popup,width=900,height=600");
+    if (terminal) terminal.document.title = `${component.name} - WIP Terminal`;
   };
   terminalHeader.appendChild(popoutBtn);
   terminalPanel.appendChild(terminalHeader);
@@ -336,6 +338,8 @@ function renderComponentRow(appId, component) {
         alert(`Could not open terminal for ${component.name}: ${text || "unknown server error"}`);
         return;
       }
+      const terminal = window.open(`/terminal.html?app=${encodeURIComponent(appId)}&component=${encodeURIComponent(component.name)}`, "wip-terminal", "popup,width=900,height=600");
+      if (terminal) terminal.document.title = `${component.name} - WIP Terminal`;
       await refreshCard(row.closest(".app-card"), appId);
     };
     terminalHeader.appendChild(popoutBtn);

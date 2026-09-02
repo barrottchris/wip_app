@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strconv"
@@ -34,6 +35,7 @@ func (w *processLogWriter) Write(p []byte) (int, error) {
 type ProcessSession struct {
 	mu          sync.Mutex
 	cmd         *exec.Cmd
+	stdin       io.WriteCloser
 	terminal    bool
 	logs        []string
 	lastError   string
@@ -310,6 +312,11 @@ func (pm *ProcessManager) Start(appID, appPath string, component Component) erro
 	}
 	cmd.Dir = appPath
 	session := &ProcessSession{cmd: cmd, terminal: true}
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return fmt.Errorf("creating terminal input: %w", err)
+	}
+	session.stdin = stdin
 	session.appendLog(fmt.Sprintf("starting %s", component.Name))
 	if captureTerminalOutput() {
 		cmd.Stdout = &processLogWriter{session: session}
@@ -347,6 +354,9 @@ func (pm *ProcessManager) Start(appID, appPath string, component Component) erro
 			session.exited = true
 			session.mu.Unlock()
 		}
+		if session.stdin != nil {
+			_ = session.stdin.Close()
+		}
 		session.mu.Lock()
 		session.exited = true
 		session.mu.Unlock()
@@ -374,6 +384,24 @@ func (pm *ProcessManager) OpenTerminal(appID, component string) error {
 	}
 	if !pm.IsRunning(appID, component) {
 		return fmt.Errorf("terminal session for component %q is no longer running", component)
+	}
+	return nil
+}
+
+// SendTerminalInput writes a command or keystrokes to the existing session.
+func (pm *ProcessManager) SendTerminalInput(appID, component, input string) error {
+	pm.mu.Lock()
+	if pm.procs[appID] == nil {
+		pm.mu.Unlock()
+		return fmt.Errorf("no terminal session exists for component %q", component)
+	}
+	session := pm.procs[appID][component]
+	pm.mu.Unlock()
+	if session == nil || session.stdin == nil || !pm.IsRunning(appID, component) {
+		return fmt.Errorf("terminal session for component %q is no longer running", component)
+	}
+	if _, err := session.stdin.Write([]byte(input)); err != nil {
+		return fmt.Errorf("writing to terminal for %q: %w", component, err)
 	}
 	return nil
 }
@@ -451,7 +479,7 @@ func buildTerminalSessionCommand(appPath string, component Component) *exec.Cmd 
 	if command == "" {
 		command = "echo no start command configured"
 	}
-	return exec.Command("cmd.exe", "/K", fmt.Sprintf("title %s && %s", component.Name, command))
+	return exec.Command("cmd.exe", "/K", fmt.Sprintf("title %s && %s & exit", component.Name, command))
 }
 
 // BuildTerminalCommand creates the Windows command line used to open an

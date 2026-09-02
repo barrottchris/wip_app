@@ -346,6 +346,7 @@ func (s *Server) handleAppSubroutes(w http.ResponseWriter, r *http.Request) {
 	case "start", "stop", "terminal":
 		var body struct {
 			Component string `json:"component"`
+			Input     string `json:"input"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -377,6 +378,14 @@ func (s *Server) handleAppSubroutes(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if action == "terminal" {
+			if body.Input != "" {
+				if err := s.processManager.SendTerminalInput(id, body.Component, body.Input); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				writeJSON(w, map[string]string{"status": "ok"})
+				return
+			}
 			if err := s.processManager.OpenTerminal(id, body.Component); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
