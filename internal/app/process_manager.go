@@ -34,6 +34,7 @@ func (w *processLogWriter) Write(p []byte) (int, error) {
 type ProcessSession struct {
 	mu          sync.Mutex
 	cmd         *exec.Cmd
+	terminal    bool
 	logs        []string
 	lastError   string
 	lastExitErr error
@@ -299,13 +300,21 @@ func (pm *ProcessManager) Start(appID, appPath string, component Component) erro
 		}
 		return fmt.Errorf("checking app directory %q: %w", appPath, err)
 	}
+	if pm.IsRunning(appID, component.Name) {
+		return fmt.Errorf("component %q is already running", component.Name)
+	}
 
-	cmd := buildCommand(component.RunMode, component.StartCommand)
+	cmd := buildTerminalSessionCommand(appPath, component)
+	if err := prepareVisibleTerminal(cmd); err != nil {
+		return err
+	}
 	cmd.Dir = appPath
-	session := &ProcessSession{cmd: cmd}
+	session := &ProcessSession{cmd: cmd, terminal: true}
 	session.appendLog(fmt.Sprintf("starting %s", component.Name))
-	cmd.Stdout = &processLogWriter{session: session}
-	cmd.Stderr = &processLogWriter{session: session}
+	if captureTerminalOutput() {
+		cmd.Stdout = &processLogWriter{session: session}
+		cmd.Stderr = &processLogWriter{session: session}
+	}
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("starting %q: %w", component.Name, err)
@@ -346,6 +355,26 @@ func (pm *ProcessManager) Start(appID, appPath string, component Component) erro
 		}
 	}()
 
+	return nil
+}
+
+// OpenTerminal reuses the visible command prompt owned by a running session.
+// It intentionally does not execute the component start command again.
+func (pm *ProcessManager) OpenTerminal(appID, component string) error {
+	pm.mu.Lock()
+	if pm.procs[appID] == nil {
+		pm.mu.Unlock()
+		return fmt.Errorf("no terminal session exists for component %q", component)
+	}
+	session := pm.procs[appID][component]
+	pm.mu.Unlock()
+
+	if session == nil || !session.terminal {
+		return fmt.Errorf("no attachable terminal session exists for component %q", component)
+	}
+	if !pm.IsRunning(appID, component) {
+		return fmt.Errorf("terminal session for component %q is no longer running", component)
+	}
 	return nil
 }
 
@@ -415,6 +444,14 @@ func buildCommand(runMode RunMode, command string) *exec.Cmd {
 	// Keep the simplest native case working cross-platform and shell-aware for
 	// multi-word commands.
 	return exec.Command("cmd", "/C", command)
+}
+
+func buildTerminalSessionCommand(appPath string, component Component) *exec.Cmd {
+	command := strings.TrimSpace(component.StartCommand)
+	if command == "" {
+		command = "echo no start command configured"
+	}
+	return exec.Command("cmd.exe", "/K", fmt.Sprintf("title %s && %s", component.Name, command))
 }
 
 // BuildTerminalCommand creates the Windows command line used to open an

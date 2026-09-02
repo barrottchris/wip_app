@@ -6,9 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
-	"strings"
 	"syscall"
 
 	"wip/internal/app"
@@ -20,9 +18,9 @@ import (
 
 // Server holds shared state for HTTP handlers.
 type Server struct {
-	store         *app.Store
-	configStore   *config.Store
-	runtime       *app.RuntimeTracker // live running/stopped state, never persisted — see internal/app/runtime.go
+	store          *app.Store
+	configStore    *config.Store
+	runtime        *app.RuntimeTracker // live running/stopped state, never persisted — see internal/app/runtime.go
 	processManager *app.ProcessManager
 }
 
@@ -297,21 +295,6 @@ func (s *Server) handleGitRefresh(w http.ResponseWriter, r *http.Request, id str
 	writeJSON(w, s.withConnections(updated))
 }
 
-func openComponentTerminal(appPath string, component app.Component) error {
-	if appPath == "" {
-		return fmt.Errorf("component path is required")
-	}
-	if strings.TrimSpace(component.StartCommand) == "" {
-		return fmt.Errorf("component %q has no start command", component.Name)
-	}
-	cmdLine := app.BuildTerminalCommand(appPath, component)
-	cmd := exec.Command("cmd.exe", "/K", cmdLine)
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("opening terminal for %q: %w", component.Name, err)
-	}
-	return nil
-}
-
 // handleAppSubroutes is a very simple manual router for MVP purposes.
 // TODO: swap for a real router (chi, gorilla/mux, or Go 1.22's enhanced
 // http.ServeMux patterns) once routes grow beyond a handful.
@@ -394,11 +377,11 @@ func (s *Server) handleAppSubroutes(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if action == "terminal" {
-			if err := openComponentTerminal(entry.LocalPath, component); err != nil {
+			if err := s.processManager.OpenTerminal(id, body.Component); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			writeJSON(w, map[string]string{"status": "ok", "command": component.StartCommand})
+			writeJSON(w, map[string]string{"status": "ok", "component": body.Component})
 			return
 		}
 

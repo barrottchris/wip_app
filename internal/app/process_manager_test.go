@@ -34,6 +34,40 @@ func TestProcessManagerStartsAndStopsNativeProcess(t *testing.T) {
 	}
 }
 
+func TestProcessManagerOpenTerminalRequiresRunningSession(t *testing.T) {
+	pm := NewProcessManager()
+
+	if err := pm.OpenTerminal("missing-app", "Server"); err == nil {
+		t.Fatal("expected opening a missing terminal session to fail")
+	}
+}
+
+func TestProcessManagerRejectsDuplicateStart(t *testing.T) {
+	pm := NewProcessManager()
+	tempDir := t.TempDir()
+	component := Component{
+		Name:         "Server",
+		StartCommand: "ping -n 20 127.0.0.1 >NUL",
+		RunMode:      RunModeNative,
+	}
+
+	if err := pm.Start("app-duplicate", tempDir, component); err != nil {
+		t.Fatalf("start process: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := pm.Stop("app-duplicate", tempDir, component); err != nil {
+			t.Logf("stop process: %v", err)
+		}
+	})
+
+	if err := pm.OpenTerminal("app-duplicate", "Server"); err != nil {
+		t.Fatalf("open running terminal: %v", err)
+	}
+	if err := pm.Start("app-duplicate", tempDir, component); err == nil {
+		t.Fatal("expected duplicate start to fail")
+	}
+}
+
 func TestProcessManagerUsesConfiguredStopCommand(t *testing.T) {
 	pm := NewProcessManager()
 	tempDir := t.TempDir()

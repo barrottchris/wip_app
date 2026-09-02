@@ -45,10 +45,12 @@ export function renderAppCard(entry) {
       <div class="app-card-status-panel">
         ${appStatusBadge}
         ${runtimeStatusBadge}
-        ${runningUrl ? `<div class="app-url-label">Access app here</div><a class="app-url-pill" href="${runningUrl}" target="_blank" rel="noreferrer">${runningUrl}</a>` : ""}
+        <div class="app-url-slot"></div>
       </div>
     </div>
   `;
+
+  updateAppUrl(card, runningUrl);
 
   card.querySelector(".app-name").addEventListener("click", (e) => {
     e.stopPropagation();
@@ -81,7 +83,7 @@ export function renderAppCard(entry) {
   }
 
   if (firstRunningComponent) {
-    const livePanel = createTerminalPanel(entry.id, firstRunningComponent);
+    const livePanel = createTerminalPanel(card, entry.id, firstRunningComponent);
     terminalSlot.appendChild(livePanel);
   }
 
@@ -152,8 +154,26 @@ export function renderConnectionPill(label, connected, comingSoon, onClick) {
   return pill;
 }
 
-function createTerminalPanel(appId, component) {
-  const logs = Array.isArray(component.logs) ? component.logs.slice(-8) : [];
+function updateAppUrl(card, url) {
+  const urlSlot = card.querySelector(".app-url-slot");
+  if (!urlSlot) return;
+
+  urlSlot.replaceChildren();
+  if (!url) return;
+
+  const label = document.createElement("div");
+  label.className = "app-url-label";
+  label.textContent = "Access app here";
+  const link = document.createElement("a");
+  link.className = "app-url-pill";
+  link.href = url;
+  link.target = "_blank";
+  link.rel = "noreferrer";
+  link.textContent = url;
+  urlSlot.append(label, link);
+}
+
+function createTerminalPanel(card, appId, component) {
   const terminalPanel = document.createElement("div");
   terminalPanel.className = "component-terminal-panel";
 
@@ -179,24 +199,62 @@ function createTerminalPanel(appId, component) {
   terminalHeader.appendChild(popoutBtn);
   terminalPanel.appendChild(terminalHeader);
 
+  renderTerminalOutput(terminalPanel, component);
+  if (component.running) pollTerminalOutput(card, terminalPanel, appId, component.name);
+
+  return terminalPanel;
+}
+
+function renderTerminalOutput(terminalPanel, component) {
+  let logBlock = terminalPanel.querySelector(".component-logs");
+  terminalPanel.querySelector(".component-log-empty")?.remove();
+
+  const logs = Array.isArray(component.logs) ? component.logs.slice(-8) : [];
   if (logs.length > 0) {
-    const logBlock = document.createElement("div");
-    logBlock.className = "component-logs";
+    const wasAtBottom = !logBlock ||
+      logBlock.scrollHeight - logBlock.scrollTop <= logBlock.clientHeight + 4;
+    if (!logBlock) {
+      logBlock = document.createElement("div");
+      logBlock.className = "component-logs";
+      terminalPanel.appendChild(logBlock);
+    }
+    logBlock.replaceChildren();
     logs.forEach((entry) => {
       const line = document.createElement("div");
       line.className = "component-log-line";
       line.textContent = entry;
       logBlock.appendChild(line);
     });
-    terminalPanel.appendChild(logBlock);
+    if (wasAtBottom) logBlock.scrollTop = logBlock.scrollHeight;
+  } else if (logBlock) {
+    logBlock.remove();
   } else if (component.running) {
     const idle = document.createElement("div");
-    idle.className = "component-log-line muted";
+    idle.className = "component-log-line muted component-log-empty";
     idle.textContent = "Process is running with no output yet.";
     terminalPanel.appendChild(idle);
   }
+}
 
-  return terminalPanel;
+function pollTerminalOutput(card, terminalPanel, appId, componentName) {
+  setTimeout(async () => {
+    if (!terminalPanel.isConnected) return;
+
+    try {
+      const app = await getApp(appId);
+      const component = (app.components || []).find((item) => item.name === componentName);
+      if (!component) return;
+
+      renderTerminalOutput(terminalPanel, component);
+      const runningUrl = (app.components || []).find((item) => item.running && item.url)?.url || null;
+      updateAppUrl(card, runningUrl);
+      if (component.running && terminalPanel.isConnected) {
+        pollTerminalOutput(card, terminalPanel, appId, componentName);
+      }
+    } catch (err) {
+      if (terminalPanel.isConnected) pollTerminalOutput(card, terminalPanel, appId, componentName);
+    }
+  }, 1000);
 }
 
 function renderComponentRow(appId, component) {
