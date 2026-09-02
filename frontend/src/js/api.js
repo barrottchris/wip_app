@@ -106,6 +106,14 @@ export async function browse(path) {
   return res.json();
 }
 
+export function openFolder(path) {
+  return fetch("/api/open-folder", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path }),
+  });
+}
+
 export async function getSettings() {
   const res = await fetch("/api/settings");
   if (!res.ok) throw new Error(`HTTP ${res.status}`);

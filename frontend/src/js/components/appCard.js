@@ -1,5 +1,5 @@
 import { capitalize } from "../utils.js";
-import { getApp, openComponentTerminal, startComponent, stopComponent } from "../api.js";
+import { getApp, openComponentTerminal, openFolder, startComponent, stopComponent } from "../api.js";
 import { openAppDetail, openGitPage, refreshCurrentPage } from "../router.js";
 
 async function refreshCard(card, appId) {
@@ -34,7 +34,7 @@ export function renderAppCard(entry) {
         <span class="app-name">${entry.name}</span>
         <p class="app-description">${entry.description || ""}</p>
         <div class="app-meta">
-          <span title="${directory}">Folder directory: ${directory}</span>
+          <a href="#" class="folder-link" title="Open folder in File Explorer"></a>
           <span>last edited: ${lastEdited}</span>
         </div>
         <div class="connection-pills"></div>
@@ -50,6 +50,20 @@ export function renderAppCard(entry) {
   `;
 
   updateAppUrl(card, runningUrl);
+
+  const folderLink = card.querySelector(".folder-link");
+  folderLink.textContent = `Folder directory: ${directory}`;
+  if (entry.localPath) {
+    folderLink.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const res = await openFolder(entry.localPath);
+      if (!res.ok) alert(`Could not open folder: ${await res.text()}`);
+    });
+  } else {
+    folderLink.removeAttribute("href");
+    folderLink.classList.add("folder-link-unavailable");
+  }
 
   card.querySelector(".app-name").addEventListener("click", (e) => {
     e.stopPropagation();

@@ -6,7 +6,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"syscall"
 	"time"
@@ -58,6 +60,7 @@ func main() {
 
 	// Onboarding helpers
 	mux.HandleFunc("/api/browse", server.handleBrowse)
+	mux.HandleFunc("/api/open-folder", server.handleOpenFolder)
 	mux.HandleFunc("/api/git-status", server.handleGitStatus)
 	mux.HandleFunc("/api/git-init", server.handleGitInit)
 
@@ -286,6 +289,35 @@ func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, listing)
+}
+
+// handleOpenFolder opens a tracked app directory in the native file manager.
+func (s *Server) handleOpenFolder(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body struct {
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Path == "" {
+		http.Error(w, "path is required", http.StatusBadRequest)
+		return
+	}
+	info, err := os.Stat(body.Path)
+	if err != nil || !info.IsDir() {
+		http.Error(w, "directory is not available", http.StatusBadRequest)
+		return
+	}
+	if runtime.GOOS != "windows" {
+		http.Error(w, "opening folders is only supported on Windows", http.StatusNotImplemented)
+		return
+	}
+	if err := exec.Command("explorer.exe", body.Path).Start(); err != nil {
+		http.Error(w, fmt.Sprintf("could not open directory: %v", err), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]string{"status": "ok"})
 }
 
 // handleGitStatus reports whether a given path is already a git repo —

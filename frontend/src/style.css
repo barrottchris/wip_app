@@ -231,6 +231,22 @@ body {
   margin-bottom: 0.5rem;
 }
 
+.folder-link {
+  color: inherit;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.folder-link:hover,
+.folder-link:focus-visible {
+  color: #bcd7ff;
+  text-decoration: underline;
+}
+
+.folder-link-unavailable {
+  cursor: default;
+}
+
 .component-row {
   display: grid;
   grid-template-columns: minmax(180px, 1fr) minmax(320px, 1.6fr) minmax(170px, 220px);

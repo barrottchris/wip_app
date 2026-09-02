@@ -56,3 +56,5 @@ last_updated: 2026-09-02
 - 2026-09-02 — `completed` — added a hover bridge to keep the repository widget open while moving to its link, and updated both card renderers to show directory and last-edited metadata. Static selector/label validation passed; command execution remains unavailable in this session.
 - 2026-09-02 — `completed` — made the full remote URL visible as a clickable `Repository URL` row in the Git widget.
 - 2026-09-02 — `completed` — removed the redundant Git refresh button and handler from both card renderers; live Git details refresh whenever the card data is loaded.
+- 2026-09-02 — `completed` — changed the folder directory metadata into a native Windows Explorer link backed by a local `open-folder` endpoint.
+- 2026-09-02 — `completed` — made the card directory display a clickable local Explorer link, with unavailable paths rendered as non-interactive text. Static references validated; command execution was unavailable in this session.
