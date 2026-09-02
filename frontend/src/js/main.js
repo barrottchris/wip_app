@@ -3,11 +3,13 @@ import { renderAppDetailPage } from "./pages/appDetail.js";
 import { renderAppGitPage } from "./pages/appGit.js";
 import { renderArchivedPage } from "./pages/archived.js";
 import { renderBrainstormPage, renderActivityPage } from "./pages/placeholders.js";
+import { renderHomePage } from "./pages/home.js";
 import { renderRegistryPage } from "./pages/registry.js";
 import { renderSettingsPage } from "./pages/settings.js";
 import { navigateTo, setPages } from "./router.js";
 
 const pages = {
+  home: renderHomePage,
   registry: renderRegistryPage,
   archived: renderArchivedPage,
   brainstorm: renderBrainstormPage,
@@ -25,8 +27,10 @@ if (addAppBtn) {
   addAppBtn.addEventListener("click", () => navigateTo("add-app"));
 }
 
+document.getElementById("brand-home")?.addEventListener("click", () => navigateTo("home"));
+
 document.querySelectorAll(".nav-item").forEach((el) => {
   el.addEventListener("click", () => navigateTo(el.dataset.page));
 });
 
-window.addEventListener("DOMContentLoaded", () => navigateTo("registry"));
+window.addEventListener("DOMContentLoaded", () => navigateTo("home"));

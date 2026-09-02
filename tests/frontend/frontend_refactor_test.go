@@ -28,8 +28,17 @@ func TestFrontendRefactorEntryPoints(t *testing.T) {
 	if !strings.Contains(text, "\"app-git\": renderAppGitPage") {
 		t.Fatal("frontend/src/js/main.js must register the Git page")
 	}
-	if !strings.Contains(text, "navigateTo(\"registry\")") {
-		t.Fatal("frontend/src/js/main.js must start on the registry page")
+	if !strings.Contains(text, "navigateTo(\"home\")") {
+		t.Fatal("frontend/src/js/main.js must start on the home page")
+	}
+
+	indexFile := filepath.Join("..", "..", "frontend", "src", "index.html")
+	indexContent, err := os.ReadFile(indexFile)
+	if err != nil {
+		t.Fatalf("missing frontend shell: %v", err)
+	}
+	if !strings.Contains(string(indexContent), `id="brand-home"`) {
+		t.Fatal("frontend brand must provide a home navigation target")
 	}
 }
 
