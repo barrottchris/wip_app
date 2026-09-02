@@ -161,3 +161,39 @@ func TestStoreCreateAndListAppRoundTrip(t *testing.T) {
 		t.Fatalf("len(ListArchivedApps()) = %d; want 1", len(archived))
 	}
 }
+
+func TestStoreActivityRoundTripAndFilters(t *testing.T) {
+	d := newTestDB(t)
+	store := app.NewStore(d.Conn)
+	for i, outcome := range []string{"success", "failure"} {
+		if err := store.RecordActivity(app.ActivityEvent{
+			OccurredAt: time.Now().Add(time.Duration(i) * time.Second), AppID: "demo-app", AppName: "Demo App",
+			EventType: "component.start", Summary: "Started Frontend", Branch: "main",
+			LifecycleStatus: "active", RuntimeStatus: "running", Changes: "started process",
+			Outcome: outcome, Detail: "detail",
+		}); err != nil {
+			t.Fatalf("RecordActivity() failed: %v", err)
+		}
+	}
+
+	events, err := store.ListActivity(100, 0, "demo-app", "component.start", "failure", "main")
+	if err != nil {
+		t.Fatalf("ListActivity() failed: %v", err)
+	}
+	if len(events) != 1 || events[0].Outcome != "failure" || events[0].Branch != "main" {
+		t.Fatalf("ListActivity() = %+v; want one filtered failure event", events)
+	}
+}
+
+func TestStoreActivityEmptyResultIsNonNil(t *testing.T) {
+	d := newTestDB(t)
+	store := app.NewStore(d.Conn)
+
+	events, err := store.ListActivity(100, 0, "", "", "", "")
+	if err != nil {
+		t.Fatalf("ListActivity() failed: %v", err)
+	}
+	if events == nil {
+		t.Fatal("ListActivity() returned nil; API responses must encode an empty array")
+	}
+}

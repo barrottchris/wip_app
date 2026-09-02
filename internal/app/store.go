@@ -57,6 +57,52 @@ func NewStore(conn *sql.DB) *Store {
 	return &Store{conn: conn}
 }
 
+func (s *Store) RecordActivity(event ActivityEvent) error {
+	_, err := s.conn.Exec(`
+		INSERT INTO activity_events (
+			occurred_at, app_id, app_name, event_type, summary, branch, build,
+			lifecycle_status, runtime_status, changes, outcome, detail
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+	`, event.OccurredAt, event.AppID, event.AppName, event.EventType, event.Summary,
+		event.Branch, event.Build, event.LifecycleStatus, event.RuntimeStatus,
+		event.Changes, event.Outcome, event.Detail)
+	return err
+}
+
+func (s *Store) ListActivity(limit, offset int, appID, eventType, outcome, branch string) ([]ActivityEvent, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	rows, err := s.conn.Query(`
+		SELECT id, occurred_at, app_id, app_name, event_type, summary, branch,
+		       build, lifecycle_status, runtime_status, changes, outcome, detail
+		FROM activity_events
+		WHERE ($1 = '' OR app_id = $1)
+		  AND ($2 = '' OR event_type = $2)
+		  AND ($3 = '' OR outcome = $3)
+		  AND ($4 = '' OR branch = $4)
+		ORDER BY occurred_at DESC, id DESC
+		LIMIT $5 OFFSET $6
+	`, appID, eventType, outcome, branch, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("listing activity: %w", err)
+	}
+	defer rows.Close()
+
+	events := make([]ActivityEvent, 0)
+	for rows.Next() {
+		var event ActivityEvent
+		if err := rows.Scan(&event.ID, &event.OccurredAt, &event.AppID, &event.AppName,
+			&event.EventType, &event.Summary, &event.Branch, &event.Build,
+			&event.LifecycleStatus, &event.RuntimeStatus, &event.Changes,
+			&event.Outcome, &event.Detail); err != nil {
+			return nil, fmt.Errorf("scanning activity: %w", err)
+		}
+		events = append(events, event)
+	}
+	return events, rows.Err()
+}
+
 // ListApps returns every non-archived tracked app for the main registry
 // view. Archived apps are deliberately excluded — see ListArchivedApps.
 func (s *Store) ListApps() ([]Entry, error) {
@@ -110,6 +156,20 @@ func (s *Store) GetApp(id string) (Entry, error) {
 	entry, err := scanEntry(row)
 	if err == sql.ErrNoRows {
 		return Entry{}, fmt.Errorf("app not found: %s", id)
+	}
+	return entry, err
+}
+
+func (s *Store) GetAppByPath(path string) (Entry, error) {
+	row := s.conn.QueryRow(`
+		SELECT id, name, description, stack, status, notes, local_path,
+		       repo_url, default_branch, branches, components,
+		       created_at, last_touched_at, archived
+		FROM apps WHERE local_path = $1 LIMIT 1
+	`, path)
+	entry, err := scanEntry(row)
+	if err == sql.ErrNoRows {
+		return Entry{}, fmt.Errorf("app not found for path: %s", path)
 	}
 	return entry, err
 }

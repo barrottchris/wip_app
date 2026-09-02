@@ -62,3 +62,20 @@ type Entry struct {
 	LastTouchedAt time.Time   `json:"lastTouchedAt"`
 	Archived      bool        `json:"archived"`
 }
+
+// ActivityEvent is an immutable snapshot of an operation performed through WIP.
+type ActivityEvent struct {
+	ID              int64     `json:"id"`
+	OccurredAt      time.Time `json:"occurredAt"`
+	AppID           string    `json:"appId"`
+	AppName         string    `json:"appName"`
+	EventType       string    `json:"eventType"`
+	Summary         string    `json:"summary"`
+	Branch          string    `json:"branch,omitempty"`
+	Build           string    `json:"build,omitempty"`
+	LifecycleStatus string    `json:"lifecycleStatus,omitempty"`
+	RuntimeStatus   string    `json:"runtimeStatus,omitempty"`
+	Changes         string    `json:"changes,omitempty"`
+	Outcome         string    `json:"outcome"`
+	Detail          string    `json:"detail,omitempty"`
+}

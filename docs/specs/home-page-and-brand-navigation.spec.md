@@ -17,11 +17,13 @@ last_updated: 2026-09-02
 - A first-time or returning user needs a concise explanation of why WIP exists before entering the operational registry.
 - The `WIP` brand should provide a reliable way back to that explanation from any primary navigation page.
 - The home page may use a visual explanation of the problem, but the product should remain useful without generated artwork.
+- The current compact visual size is appropriate, but the surrounding Home layout no longer feels aligned because its fixed-width visual, text column, and principles strip use different visual edges.
 
 ## Questions to answer
 - Resolved: open on Home every time in this early build.
 - Resolved: use a CSS/layout-based visual now and defer any generated image; reserve an image slot only if it fits the page.
 - Resolved: include clear Registry and Add app shortcuts without duplicating registry content.
+- Resolved: use a centered content frame with a balanced two-column hero and a principles strip aligned to the same frame edges.
 
 ## Requirements
 - Add a Home route and page that briefly explains the problem WIP solves using language grounded in the product docs.
@@ -31,6 +33,9 @@ last_updated: 2026-09-02
 - Include a visual problem explanation only if it can be delivered without unapproved image-generation cost; otherwise use intentional typography, layout, and existing UI primitives.
 - Keep the page consistent with the existing native-app frontend and usable at narrow window widths.
 - Add focused frontend coverage for the Home route, brand navigation, and initial route behavior where supported by the repository's existing test setup.
+- Preserve the current visual component sizes while reorganizing the surrounding layout for clearer alignment.
+- Keep the visual container compact and align its outer edges with the hero content frame.
+- Ensure the principles strip, hero text, and visual share a consistent responsive width and spacing system.
 
 ## Proposed implementation plan
 1. Confirm the initial route, Home content emphasis, and whether a visual is wanted after the image-cost decision.
@@ -39,6 +44,13 @@ last_updated: 2026-09-02
 4. Add the approved visual treatment, using a non-generated fallback if image generation is not approved.
 5. Add focused regression coverage and validate the frontend behavior.
 6. Update this spec with the final decision, validation, and completion status.
+
+### Reorganization plan
+1. Wrap the Home content in a centered frame with a stable maximum width and consistent horizontal gutters.
+2. Keep the introduction and compact visual as the two columns of one hero row, vertically centered and aligned.
+3. Keep the visual's internal boards, hub, and text dimensions unchanged; adjust only the container placement and responsive flow.
+4. Align the three principles to the same frame and use equal columns on wide windows, stacking cleanly on narrow windows.
+5. Validate the page at wide and narrow layouts and update this spec with the result.
 
 ## Acceptance criteria
 - Clicking `WIP` always navigates to Home from a primary page.
@@ -53,3 +65,10 @@ last_updated: 2026-09-02
 - 2026-09-02 — `todo` — spec drafted from the requested Home page and current static brand/default Registry navigation.
 - 2026-09-02 — `in-progress` — user confirmed Home as the initial route, approved Registry/Add app shortcuts, and requested a CSS visual with image generation deferred.
 - 2026-09-02 — `completed` — added Home as the initial route, made the WIP brand navigate Home, added Registry/Add app shortcuts, and added a responsive CSS visual with a future image-slot hook. Source-level validation completed; executable tests were unavailable because this session exposes no command runner.
+- 2026-09-02 — `completed` — compacted the CSS visual container while preserving the internal illustration element sizes and responsive page proportions.
+- 2026-09-02 — `todo` — user requested a layout reorganization because the compact visual now feels misaligned with the rest of the Home page; plan drafted for confirmation before editing.
+- 2026-09-02 — `in-progress` — user approved the reorganization plan; implementation started.
+- 2026-09-02 — `completed` — reorganized Home into a centered frame with a shared hero row, aligned principles strip, and responsive narrow-window flow. Source-level validation completed; executable tests were unavailable because no command runner was exposed in this session.
+- 2026-09-02 — `completed` — replaced the vague Home headline with concrete language about WIP's findable and runnable project registry.
+- 2026-09-02 — `completed` — updated the Home headline to "Your work-in-progress, managed in one place."
+- 2026-09-02 — `completed` — added a restrained Planned connections note for GitHub, Jira, and Confluence without implying those integrations are live.

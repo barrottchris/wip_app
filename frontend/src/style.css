@@ -492,6 +492,69 @@ button:hover {
   font-size: 1.1rem;
 }
 
+.activity-page {
+  max-width: 1180px;
+}
+
+.activity-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid #383838;
+  padding-bottom: 1rem;
+}
+
+.activity-heading h2 {
+  margin: 0.1rem 0 0;
+  color: #f2eee5;
+  font-size: 1.55rem;
+}
+
+.eyebrow {
+  margin: 0;
+  color: #d7b77c;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.activity-subtitle, .activity-detail-empty {
+  margin: 0.35rem 0 0;
+  color: #999;
+}
+
+.activity-count { color: #aaa; font-size: 0.8rem; }
+.activity-filters { display: flex; flex-wrap: wrap; gap: 0.5rem; padding: 1rem 0; }
+.activity-filters select, .activity-filters input { min-height: 2.1rem; padding: 0.35rem 0.55rem; background: #292929; border: 1px solid #444; border-radius: 5px; color: #eee; }
+.activity-filters input { width: 150px; }
+.activity-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(250px, 0.8fr); gap: 1rem; align-items: start; }
+.activity-day { margin: 0.8rem 0 0.35rem; color: #888; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
+.activity-event { width: 100%; display: grid; grid-template-columns: 0.55rem minmax(0, 1fr) auto auto; align-items: center; gap: 0.8rem; padding: 0.8rem; margin-bottom: 0.35rem; border: 1px solid #383838; border-radius: 6px; background: #292929; color: #eee; text-align: left; cursor: pointer; }
+.activity-event:hover, .activity-event.selected { border-color: #806c49; background: #302e29; }
+.activity-event-mark { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: #84bf89; }
+.activity-event.is-failure .activity-event-mark { background: #d37b72; }
+.activity-event-copy { min-width: 0; display: grid; gap: 0.2rem; }
+.activity-event-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-event-copy span, .activity-event time { color: #999; font-size: 0.78rem; }
+.activity-outcome { color: #9ac99f; font-size: 0.72rem; }
+.is-failure .activity-outcome, .activity-detail-error { color: #e09a91; }
+.activity-detail { position: sticky; top: 0.5rem; min-height: 230px; padding: 1rem; border-left: 2px solid #806c49; background: #252525; }
+.activity-detail h3 { margin: 0.4rem 0 1rem; color: #f2eee5; }
+.activity-detail dl { display: grid; grid-template-columns: 90px 1fr; gap: 0.55rem; margin: 0; font-size: 0.82rem; }
+.activity-detail dt { color: #888; }.activity-detail dd { margin: 0; color: #ddd; overflow-wrap: anywhere; }
+.activity-empty { display: grid; gap: 0.3rem; padding: 2rem; border: 1px dashed #444; color: #aaa; text-align: center; }
+.activity-empty strong { color: #eee; }.activity-error { color: #df978e; }
+.activity-more { display: block; margin: 1rem auto; }
+
+@media (max-width: 760px) {
+  .activity-heading { align-items: start; flex-direction: column; }
+  .activity-layout { grid-template-columns: 1fr; }
+  .activity-detail { position: static; }
+  .activity-event { grid-template-columns: 0.55rem minmax(0, 1fr) auto; }
+  .activity-outcome { display: none; }
+}
+
 /* Add App page */
 .add-app-page {
   max-width: 560px;
@@ -770,11 +833,16 @@ button:hover {
 }
 
 .home-page {
-  display: grid;
-  grid-template-columns: minmax(280px, 0.85fr) minmax(360px, 1.15fr);
-  gap: 2rem;
-  max-width: 1120px;
+  width: min(100%, 1080px);
+  margin: 0 auto;
   padding: 1rem 0 2rem;
+}
+
+.home-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 440px;
+  align-items: center;
+  gap: clamp(2rem, 5vw, 4.5rem);
 }
 
 .home-intro {
@@ -831,7 +899,11 @@ button:hover {
 
 .home-visual {
   position: relative;
-  min-height: 370px;
+  width: min(100%, 440px);
+  min-height: 320px;
+  aspect-ratio: 1.375;
+  justify-self: end;
+  align-self: center;
   overflow: hidden;
   border: 1px solid #4b463e;
   background: radial-gradient(circle at 70% 35%, #3b3932, #242424 62%);
@@ -895,7 +967,6 @@ button:hover {
 .visual-hub span { color: #cbb98f; font-size: 0.68rem; line-height: 1.3; }
 
 .home-principles {
-  grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 1px;
@@ -912,9 +983,30 @@ button:hover {
 .home-principles strong { color: #f0e9dc; }
 .home-principles span { color: #928e86; font-size: 0.82rem; line-height: 1.45; }
 
+.home-roadmap {
+  margin: 1.25rem 0 0;
+  color: #d3c6aa;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+}
+
+.home-roadmap span {
+  margin-right: 0.8rem;
+  color: #817d75;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.home-roadmap b {
+  margin: 0 0.45rem;
+  color: #777168;
+  font-weight: 400;
+}
+
 @media (max-width: 760px) {
-  .home-page { grid-template-columns: 1fr; gap: 1.25rem; }
-  .home-visual { min-height: 300px; }
+  .home-page { padding-top: 0.5rem; }
+  .home-hero { grid-template-columns: 1fr; gap: 1.25rem; }
+  .home-visual { width: 100%; min-height: 300px; aspect-ratio: auto; justify-self: stretch; }
   .home-principles { grid-template-columns: 1fr; }
   .home-principles article { padding: 0.9rem 0; }
 }

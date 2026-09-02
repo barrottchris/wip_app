@@ -6,13 +6,15 @@
 export async function listApps() {
   const res = await fetch("/api/apps");
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  const apps = await res.json();
+  return Array.isArray(apps) ? apps : [];
 }
 
 export async function listArchivedApps() {
   const res = await fetch("/api/apps?archived=true");
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  const apps = await res.json();
+  return Array.isArray(apps) ? apps : [];
 }
 
 export async function getApp(id) {
@@ -116,4 +118,15 @@ export function updateSettings(payload) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+export async function listActivity(filters = {}) {
+  const params = new URLSearchParams({ limit: "100", ...filters });
+  for (const [key, value] of [...params.entries()]) {
+    if (!value) params.delete(key);
+  }
+  const res = await fetch(`/api/activity?${params}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const events = await res.json();
+  return Array.isArray(events) ? events : [];
 }

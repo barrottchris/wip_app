@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
+	"time"
 
 	"wip/internal/app"
 	"wip/internal/config"
@@ -52,6 +54,7 @@ func main() {
 	// Apps API
 	mux.HandleFunc("/api/apps", server.handleListApps)      // GET list, POST create
 	mux.HandleFunc("/api/apps/", server.handleAppSubroutes) // /api/apps/{id}, /api/apps/{id}/start, /stop, /git, /connections
+	mux.HandleFunc("/api/activity", server.handleActivity)
 
 	// Onboarding helpers
 	mux.HandleFunc("/api/browse", server.handleBrowse)
@@ -159,6 +162,32 @@ func (s *Server) handleListApps(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) handleActivity(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	query := r.URL.Query()
+	limit, _ := strconv.Atoi(query.Get("limit"))
+	offset, _ := strconv.Atoi(query.Get("offset"))
+	events, err := s.store.ListActivity(limit, offset, query.Get("appId"), query.Get("eventType"), query.Get("outcome"), query.Get("branch"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, events)
+}
+
+func (s *Server) recordActivity(entry app.Entry, eventType, summary, branch, build, runtimeStatus, changes, outcome, detail string) {
+	if err := s.store.RecordActivity(app.ActivityEvent{
+		OccurredAt: time.Now(), AppID: entry.ID, AppName: entry.Name, EventType: eventType,
+		Summary: summary, Branch: branch, Build: build, LifecycleStatus: string(entry.Status),
+		RuntimeStatus: runtimeStatus, Changes: changes, Outcome: outcome, Detail: detail,
+	}); err != nil {
+		log.Printf("recording activity: %v", err)
+	}
+}
+
 // handleCreateApp backs the "Add app" onboarding flow, covering both the
 // "existing folder" and "create new" cases (see mvp-scope.md). Git
 // initialization, if needed, is a separate explicit step the frontend
@@ -208,6 +237,7 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	s.recordActivity(entry, "app.created", "Added app to WIP", entry.DefaultBranch, "", "stopped", "Created app record", "success", "")
 
 	created, err := s.store.GetApp(id)
 	if err != nil {
@@ -268,6 +298,9 @@ func (s *Server) handleGitInit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("git init failed: %v", err), http.StatusInternalServerError)
 		return
 	}
+	if entry, err := s.store.GetAppByPath(body.Path); err == nil {
+		s.recordActivity(entry, "git.init", "Initialized git repository", entry.DefaultBranch, "", "stopped", "Created repository metadata", "success", "")
+	}
 	if err := s.store.RefreshGitInfoForPath(body.Path); err != nil {
 		http.Error(w, fmt.Sprintf("refresh git metadata failed: %v", err), http.StatusInternalServerError)
 		return
@@ -282,9 +315,11 @@ func (s *Server) handleGitRefresh(w http.ResponseWriter, r *http.Request, id str
 		return
 	}
 	if err := s.store.RefreshGitInfo(id, entry.LocalPath); err != nil {
+		s.recordActivity(entry, "git.refresh", "Refreshed git metadata", entry.DefaultBranch, "", "", "Git metadata refresh failed", "failure", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	s.recordActivity(entry, "git.refresh", "Refreshed git metadata", entry.DefaultBranch, "", "", "Updated repository and branch metadata", "success", "")
 	updated, err := s.store.GetApp(id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -400,19 +435,23 @@ func (s *Server) handleAppSubroutes(w http.ResponseWriter, r *http.Request) {
 
 		if action == "start" {
 			if err := s.processManager.Start(id, entry.LocalPath, component); err != nil {
+				s.recordActivity(entry, "component.start", fmt.Sprintf("Started %s", component.Name), entry.DefaultBranch, "", "stopped", "Component failed to start", "failure", err.Error())
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 			s.runtime.SetRunning(id, body.Component, true)
 			response["url"] = app.InferBrowseURL(component)
 			response["logs"] = s.processManager.GetComponentLogs(id, body.Component)
+			s.recordActivity(entry, "component.start", fmt.Sprintf("Started %s", component.Name), entry.DefaultBranch, "", "running", "Component process started", "success", "")
 		} else {
 			if err := s.processManager.Stop(id, entry.LocalPath, component); err != nil {
+				s.recordActivity(entry, "component.stop", fmt.Sprintf("Stopped %s", component.Name), entry.DefaultBranch, "", "running", "Component failed to stop", "failure", err.Error())
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 			s.runtime.SetRunning(id, body.Component, false)
 			response["logs"] = s.processManager.GetComponentLogs(id, body.Component)
+			s.recordActivity(entry, "component.stop", fmt.Sprintf("Stopped %s", component.Name), entry.DefaultBranch, "", "stopped", "Component process stopped", "success", "")
 		}
 		writeJSON(w, response)
 
@@ -420,10 +459,17 @@ func (s *Server) handleAppSubroutes(w http.ResponseWriter, r *http.Request) {
 		s.handleArchiveApp(w, r, id)
 
 	case "unarchive":
+		entry, err := s.store.GetApp(id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
 		if err := s.store.UnarchiveApp(id); err != nil {
+			s.recordActivity(entry, "app.unarchived", "Restored app from archive", entry.DefaultBranch, "", "", "Unarchive failed", "failure", err.Error())
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		s.recordActivity(entry, "app.unarchived", "Restored app from archive", entry.DefaultBranch, "", "stopped", "App restored to registry", "success", "")
 		writeJSON(w, map[string]string{"status": "ok"})
 
 	case "components":
@@ -462,6 +508,9 @@ func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request, id stri
 	}
 
 	if err := s.store.UpdateApp(id, body.Name, body.Description, body.LocalPath, status); err != nil {
+		if entry, getErr := s.store.GetApp(id); getErr == nil {
+			s.recordActivity(entry, "app.updated", "Updated app details", entry.DefaultBranch, "", "", "App update failed", "failure", err.Error())
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -475,6 +524,7 @@ func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request, id stri
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	s.recordActivity(entry, "app.updated", "Updated app details", entry.DefaultBranch, "", "stopped", "Updated name, description, path, or lifecycle status", "success", "")
 	writeJSON(w, s.withConnections(entry))
 }
 
@@ -498,6 +548,7 @@ func (s *Server) handleArchiveApp(w http.ResponseWriter, r *http.Request, id str
 	}
 
 	if err := s.store.ArchiveApp(id); err != nil {
+		s.recordActivity(entry, "app.archived", "Archived app", entry.DefaultBranch, "", "stopped", "Archive failed", "failure", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -510,6 +561,7 @@ func (s *Server) handleArchiveApp(w http.ResponseWriter, r *http.Request, id str
 			return
 		}
 	}
+	s.recordActivity(entry, "app.archived", "Archived app", entry.DefaultBranch, "", "stopped", "App archived", "success", "")
 
 	writeJSON(w, map[string]string{"status": "ok"})
 }
@@ -557,6 +609,7 @@ func (s *Server) handleUpdateComponents(w http.ResponseWriter, r *http.Request, 
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	s.recordActivity(entry, "components.updated", "Updated app components", entry.DefaultBranch, "", "stopped", "Saved component start and stop configuration", "success", "")
 	writeJSON(w, s.withConnections(entry))
 }
 

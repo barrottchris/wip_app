@@ -89,6 +89,22 @@ func (d *DB) migrate() error {
 			key   TEXT PRIMARY KEY,
 			value TEXT NOT NULL DEFAULT ''
 		);
+
+		CREATE TABLE IF NOT EXISTS activity_events (
+			id              INTEGER PRIMARY KEY AUTOINCREMENT,
+			occurred_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			app_id          TEXT NOT NULL,
+			app_name        TEXT NOT NULL DEFAULT '',
+			event_type      TEXT NOT NULL,
+			summary         TEXT NOT NULL,
+			branch          TEXT NOT NULL DEFAULT '',
+			build           TEXT NOT NULL DEFAULT '',
+			lifecycle_status TEXT NOT NULL DEFAULT '',
+			runtime_status  TEXT NOT NULL DEFAULT '',
+			changes         TEXT NOT NULL DEFAULT '',
+			outcome         TEXT NOT NULL,
+			detail          TEXT NOT NULL DEFAULT ''
+		);
 	`)
 	return err
 }

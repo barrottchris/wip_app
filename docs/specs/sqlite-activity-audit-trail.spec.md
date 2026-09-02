@@ -1,6 +1,6 @@
 ---
 title: SQLite activity audit trail and Activity page
-status: todo
+status: completed
 owner: copilot
 last_updated: 2026-09-02
 ---
@@ -55,3 +55,6 @@ last_updated: 2026-09-02
 
 ## Status log
 - 2026-09-02 — `todo` — spec drafted from the Activity placeholder and existing SQLite/server action boundaries; awaiting confirmation of the open questions and proposed UX.
+- 2026-09-02 — `in-progress` — user confirmed WIP actions, explicit build/check context, retained failures, and newest-100 pagination defaults.
+- 2026-09-02 — `completed` — added SQLite activity persistence, filtered API, event recording for app/git/component actions, responsive Activity feed, filters, details, and load-more pagination. Source validation completed; executable Go/frontend tests were unavailable because no terminal tool was exposed in this session.
+- 2026-09-02 — `completed` — fixed empty Activity results being serialized as JSON null, added frontend response normalization, and added a regression test for the non-nil store result.
