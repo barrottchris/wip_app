@@ -2,237 +2,12 @@ package app
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
 )
-
-// processLogWriter captures command output so the portal can show a live
-// terminal-like log, not just a boolean running flag.
-type processLogWriter struct {
-	session *ProcessSession
-}
-
-func (w *processLogWriter) Write(p []byte) (int, error) {
-	if w == nil || w.session == nil {
-		return len(p), nil
-	}
-	for _, line := range strings.Split(strings.TrimRight(string(p), "\r\n"), "\n") {
-		msg := strings.TrimSpace(line)
-		if msg == "" {
-			continue
-		}
-		w.session.appendLog(msg)
-	}
-	return len(p), nil
-}
-
-// ProcessSession holds a real OS process plus its captured output so the portal
-// can display terminal-like log output and react to termination.
-type ProcessSession struct {
-	mu          sync.Mutex
-	cmd         *exec.Cmd
-	stdin       io.WriteCloser
-	terminal    bool
-	logs        []string
-	lastError   string
-	lastExitErr error
-	exited      bool
-}
-
-func (s *ProcessSession) appendLog(msg string) {
-	if s == nil {
-		return
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if len(s.logs) >= 200 {
-		s.logs = append([]string(nil), s.logs[len(s.logs)-199:]...)
-	}
-	s.logs = append(s.logs, msg)
-}
-
-func (s *ProcessSession) snapshotLogs() []string {
-	if s == nil {
-		return nil
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := make([]string, len(s.logs))
-	copy(out, s.logs)
-	return out
-}
-
-func (s *ProcessSession) setExitError(err error) {
-	if s == nil {
-		return
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.lastExitErr = err
-	s.exited = true
-	if err != nil {
-		s.lastError = err.Error()
-		if !strings.Contains(strings.Join(s.logs, "\n"), s.lastError) {
-			s.logs = append(s.logs, s.lastError)
-		}
-	}
-}
-
-func (s *ProcessSession) addDiagnostic(message string) {
-	if s == nil {
-		return
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if !strings.Contains(strings.Join(s.logs, "\n"), message) {
-		s.logs = append(s.logs, message)
-	}
-}
-
-func (s *ProcessSession) getLastError() string {
-	if s == nil {
-		return ""
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.lastError
-}
-
-func (s *ProcessSession) hasExited() bool {
-	if s == nil {
-		return true
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.exited
-}
-
-// InferBrowseURL derives a likely local browse URL for a component from the
-// start command. This is intentionally heuristic: many dev servers listen on a
-// known port and a human-friendly URL is easier to act on than reading the raw
-// command text. The result is used only as a UI hint and is never treated as a
-// hard guarantee that the process is healthy.
-func InferBrowseURL(component Component) string {
-	cmd := strings.TrimSpace(component.StartCommand)
-	if cmd == "" {
-		return ""
-	}
-
-	patterns := []string{
-		"--port ",
-		"-p ",
-		"-l ",
-		"--listen ",
-		"--host ",
-		"--bind ",
-	}
-
-	for _, token := range patterns {
-		if idx := strings.Index(cmd, token); idx >= 0 {
-			value := strings.TrimSpace(cmd[idx+len(token):])
-			if value != "" {
-				if portMatch := extractPort(value); portMatch != "" {
-					return "http://localhost:" + portMatch
-				}
-			}
-		}
-	}
-
-	if idx := strings.Index(cmd, "http.server"); idx >= 0 {
-		if portMatch := extractPort(cmd[idx:]); portMatch != "" {
-			return "http://127.0.0.1:" + portMatch
-		}
-	}
-
-	if idx := strings.Index(cmd, "serve"); idx >= 0 {
-		if portMatch := extractPort(cmd[idx:]); portMatch != "" {
-			return "http://localhost:" + portMatch
-		}
-	}
-
-	if portMatch := extractPort(cmd); portMatch != "" {
-		return "http://localhost:" + portMatch
-	}
-
-	return ""
-}
-
-func InferBrowseURLFromLogs(logs []string) string {
-	for _, line := range logs {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-		if idx := strings.Index(trimmed, "http://"); idx >= 0 {
-			if url, ok := readURLToken(trimmed[idx:]); ok {
-				return url
-			}
-		}
-		if idx := strings.Index(trimmed, "https://"); idx >= 0 {
-			if url, ok := readURLToken(trimmed[idx:]); ok {
-				return url
-			}
-		}
-	}
-	return ""
-}
-
-func readURLToken(value string) (string, bool) {
-	trimmed := strings.TrimSpace(value)
-	for _, end := range []string{" ", "\n", "\t", "\"", "'", ")", "]", "}"} {
-		if idx := strings.Index(trimmed, end); idx >= 0 {
-			trimmed = trimmed[:idx]
-		}
-	}
-	if trimmed == "" {
-		return "", false
-	}
-	if strings.HasPrefix(trimmed, "http://") || strings.HasPrefix(trimmed, "https://") {
-		return trimmed, true
-	}
-	return "", false
-}
-
-func extractPort(value string) string {
-	parts := strings.Fields(value)
-	for i, part := range parts {
-		if strings.HasPrefix(part, "http://") || strings.HasPrefix(part, "https://") {
-			if i+1 < len(parts) {
-				if port, ok := parsePort(parts[i+1]); ok {
-					return port
-				}
-			}
-		}
-		if port, ok := parsePort(part); ok {
-			return port
-		}
-		if strings.Contains(part, ":") {
-			if port, ok := parsePort(strings.TrimSpace(strings.Split(part, ":")[1])); ok {
-				return port
-			}
-		}
-	}
-	return ""
-}
-
-func parsePort(value string) (string, bool) {
-	trimmed := strings.Trim(strings.TrimSpace(value), "\"'")
-	trimmed = strings.TrimSuffix(trimmed, ",")
-	trimmed = strings.TrimSuffix(trimmed, ";")
-	trimmed = strings.TrimSuffix(trimmed, ")")
-	trimmed = strings.TrimSuffix(trimmed, "]")
-	if trimmed == "" {
-		return "", false
-	}
-	if _, err := strconv.Atoi(trimmed); err == nil {
-		return trimmed, true
-	}
-	return "", false
-}
 
 // ProcessManager tracks live OS processes spawned for components.
 // This is separate from RuntimeTracker: the tracker reflects UI-visible
@@ -474,6 +249,8 @@ func buildCommand(runMode RunMode, command string) *exec.Cmd {
 	return exec.Command("cmd", "/C", command)
 }
 
+// buildTerminalSessionCommand creates the Windows shell command used to keep a
+// component's visible terminal session attached to its process.
 func buildTerminalSessionCommand(appPath string, component Component) *exec.Cmd {
 	command := strings.TrimSpace(component.StartCommand)
 	if command == "" {
@@ -524,6 +301,7 @@ func (pm *ProcessManager) GetComponentLogs(appID, component string) []string {
 	return session.snapshotLogs()
 }
 
+// GetComponentURL returns a URL discovered in the component's captured output.
 func (pm *ProcessManager) GetComponentURL(appID, component string) string {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
@@ -540,6 +318,8 @@ func (pm *ProcessManager) GetComponentURL(appID, component string) string {
 	return ""
 }
 
+// GetComponentLastError returns the latest recorded process error for a
+// component, if its session is still available.
 func (pm *ProcessManager) GetComponentLastError(appID, component string) string {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
