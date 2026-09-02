@@ -1,6 +1,6 @@
 ---
 title: Git details hover widget
-status: in-progress
+status: completed
 owner: copilot
 last_updated: 2026-09-02
 ---
@@ -53,3 +53,6 @@ last_updated: 2026-09-02
 - 2026-09-02 — `in-progress` — approved: use the checked-out branch, derive the repo name from the remote with a folder fallback, support hover/focus plus click navigation, and show `Not available` for missing values.
 - 2026-09-02 — `completed` — added live Git summary data, connected-pill hover/focus details, repository linking, missing-data fallbacks, and repository-name tests. Automated execution was unavailable in this session because no terminal command runner is exposed.
 - 2026-09-02 — `in-progress` — improving the popover hover bridge and replacing card branch metadata with directory and last-edited metadata.
+- 2026-09-02 — `completed` — added a hover bridge to keep the repository widget open while moving to its link, and updated both card renderers to show directory and last-edited metadata. Static selector/label validation passed; command execution remains unavailable in this session.
+- 2026-09-02 — `completed` — made the full remote URL visible as a clickable `Repository URL` row in the Git widget.
+- 2026-09-02 — `completed` — removed the redundant Git refresh button and handler from both card renderers; live Git details refresh whenever the card data is loaded.

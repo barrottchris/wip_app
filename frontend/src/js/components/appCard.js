@@ -1,5 +1,5 @@
 import { capitalize } from "../utils.js";
-import { getApp, gitRefresh, openComponentTerminal, startComponent, stopComponent } from "../api.js";
+import { getApp, openComponentTerminal, startComponent, stopComponent } from "../api.js";
 import { openAppDetail, openGitPage, refreshCurrentPage } from "../router.js";
 
 async function refreshCard(card, appId) {
@@ -34,9 +34,8 @@ export function renderAppCard(entry) {
         <span class="app-name">${entry.name}</span>
         <p class="app-description">${entry.description || ""}</p>
         <div class="app-meta">
-          <span title="${directory}">directory: ${directory}</span>
+          <span title="${directory}">Folder directory: ${directory}</span>
           <span>last edited: ${lastEdited}</span>
-          <button class="refresh-git-btn" title="Refresh git status">&#8635;</button>
         </div>
         <div class="connection-pills"></div>
         <div class="app-components"></div>
@@ -55,16 +54,6 @@ export function renderAppCard(entry) {
   card.querySelector(".app-name").addEventListener("click", (e) => {
     e.stopPropagation();
     openAppDetail(entry.id);
-  });
-
-  card.querySelector(".refresh-git-btn").addEventListener("click", async (e) => {
-    e.stopPropagation();
-    const res = await gitRefresh(entry.id);
-    if (!res.ok) {
-      alert(`Could not refresh git status: ${await res.text()}`);
-      return;
-    }
-    await refreshCard(card, entry.id);
   });
 
   const pillsEl = card.querySelector(".connection-pills");
@@ -176,13 +165,18 @@ export function renderConnectionPill(label, connected, comingSoon, onClick, deta
         popover.appendChild(row);
       });
       if (details.repoUrl) {
+        const row = document.createElement("span");
+        row.className = "git-details-row";
+        const key = document.createElement("strong");
+        key.textContent = "Repository URL";
         const link = document.createElement("a");
         link.href = details.repoUrl;
         link.target = "_blank";
         link.rel = "noreferrer";
-        link.textContent = "Open repository";
+        link.textContent = details.repoUrl;
         link.addEventListener("click", (e) => e.stopPropagation());
-        popover.appendChild(link);
+        row.append(key, link);
+        popover.appendChild(row);
       }
       wrapper.appendChild(popover);
       return wrapper;

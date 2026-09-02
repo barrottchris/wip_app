@@ -1,5 +1,5 @@
 import { capitalize } from "../utils.js";
-import { gitRefresh, startComponent, stopComponent } from "../api.js";
+import { startComponent, stopComponent } from "../api.js";
 import { openAppDetail, openGitPage, refreshCurrentPage } from "../router.js";
 
 export function renderAppCard(entry) {
@@ -28,7 +28,6 @@ export function renderAppCard(entry) {
     <div class="app-meta">
       <span title="${directory}">directory: ${directory}</span>
       <span>last edited: ${lastEdited}</span>
-      <button class="refresh-git-btn" title="Refresh git status">&#8635;</button>
     </div>
     <div class="connection-pills"></div>
     <div class="app-components"></div>
@@ -37,18 +36,6 @@ export function renderAppCard(entry) {
   card.querySelector(".app-name").addEventListener("click", (e) => {
     e.stopPropagation();
     openAppDetail(entry.id);
-  });
-
-  card.querySelector(".refresh-git-btn").addEventListener("click", async (e) => {
-    e.stopPropagation();
-    const res = await gitRefresh(entry.id);
-    if (!res.ok) {
-      alert(`Could not refresh git status: ${await res.text()}`);
-      return;
-    }
-    // Re-render the whole registry so this card's branch/last-touched
-    // reflect what was just read from disk.
-    refreshCurrentPage();
   });
 
   const pillsEl = card.querySelector(".connection-pills");
