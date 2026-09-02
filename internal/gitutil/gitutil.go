@@ -7,10 +7,12 @@ package gitutil
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // HasGit reports whether path already contains a .git directory.
@@ -49,6 +51,41 @@ func RemoteURL(path string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// RepositoryName derives a short repository name from a remote URL, falling
+// back to the local folder name when the repo has no usable remote.
+func RepositoryName(remoteURL, path string) string {
+	remoteURL = strings.TrimSuffix(strings.TrimSpace(remoteURL), "/")
+	remoteURL = strings.TrimSuffix(remoteURL, ".git")
+	if remoteURL != "" {
+		if parsed, err := url.Parse(remoteURL); err == nil && parsed.Path != "" {
+			if name := filepath.Base(parsed.Path); name != "." && name != string(filepath.Separator) && name != "" {
+				return name
+			}
+		}
+		if separator := strings.LastIndexAny(remoteURL, "/:"); separator >= 0 && separator+1 < len(remoteURL) {
+			return remoteURL[separator+1:]
+		}
+	}
+	if path != "" {
+		return filepath.Base(filepath.Clean(path))
+	}
+	return ""
+}
+
+// LastCommitAt reads the committer timestamp of the latest commit on the
+// currently checked-out branch.
+func LastCommitAt(path string) (time.Time, error) {
+	if !HasGit(path) {
+		return time.Time{}, fmt.Errorf("not a git repo: %s", path)
+	}
+	cmd := exec.Command("git", "-C", path, "log", "-1", "--format=%cI", "HEAD")
+	out, err := cmd.Output()
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.Parse(time.RFC3339, strings.TrimSpace(string(out)))
 }
 
 // Init runs `git init` in path. Only called after the user explicitly

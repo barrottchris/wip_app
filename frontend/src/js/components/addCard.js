@@ -6,10 +6,10 @@ export function renderAppCard(entry) {
   const card = document.createElement("div");
   card.className = "app-card";
 
-  const branch = entry.defaultBranch || "—";
-  const lastTouched = entry.lastTouchedAt
+  const directory = entry.localPath || "Not available";
+  const lastEdited = entry.lastTouchedAt
     ? new Date(entry.lastTouchedAt).toLocaleDateString()
-    : "—";
+    : "Not available";
 
   const anyRunning = (entry.components || []).some((c) => c.running);
   // "Running" reflects live process state (computed, never stored).
@@ -26,8 +26,8 @@ export function renderAppCard(entry) {
     </div>
     <p class="app-description">${entry.description || ""}</p>
     <div class="app-meta">
-      <span>branch: ${branch}</span>
-      <span>last touched: ${lastTouched}</span>
+      <span title="${directory}">directory: ${directory}</span>
+      <span>last edited: ${lastEdited}</span>
       <button class="refresh-git-btn" title="Refresh git status">&#8635;</button>
     </div>
     <div class="connection-pills"></div>

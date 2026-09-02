@@ -94,10 +94,18 @@ func handleGracefulShutdown(database *db.DB) {
 type EntryWithConnections struct {
 	app.Entry
 	GitConnected         bool `json:"gitConnected"`
+	GitDetails           *GitDetails `json:"gitDetails,omitempty"`
 	JiraConnected        bool `json:"jiraConnected"`
 	JiraComingSoon       bool `json:"jiraComingSoon"`
 	ConfluenceConnected  bool `json:"confluenceConnected"`
 	ConfluenceComingSoon bool `json:"confluenceComingSoon"`
+}
+
+type GitDetails struct {
+	RepositoryName string     `json:"repositoryName"`
+	Branch         string     `json:"branch"`
+	LastUpdate     *time.Time `json:"lastUpdate,omitempty"`
+	RepoURL        string     `json:"repoUrl,omitempty"`
 }
 
 func (s *Server) withConnections(entry app.Entry) EntryWithConnections {
@@ -115,18 +123,29 @@ func (s *Server) withConnections(entry app.Entry) EntryWithConnections {
 		}
 	}
 
-	if gitutil.HasGit(entry.LocalPath) {
+	gitConnected := gitutil.HasGit(entry.LocalPath)
+	var gitDetails *GitDetails
+	if gitConnected {
+		gitDetails = &GitDetails{}
 		if branch, err := gitutil.DefaultBranch(entry.LocalPath); err == nil && branch != "" {
 			entry.DefaultBranch = branch
+			gitDetails.Branch = branch
 		}
-		if repoURL, err := gitutil.RemoteURL(entry.LocalPath); err == nil && repoURL != "" {
+		entry.RepoURL = ""
+		if repoURL, err := gitutil.RemoteURL(entry.LocalPath); err == nil {
 			entry.RepoURL = repoURL
+			gitDetails.RepoURL = repoURL
+		}
+		gitDetails.RepositoryName = gitutil.RepositoryName(entry.RepoURL, entry.LocalPath)
+		if lastUpdate, err := gitutil.LastCommitAt(entry.LocalPath); err == nil {
+			gitDetails.LastUpdate = &lastUpdate
 		}
 	}
 
 	return EntryWithConnections{
 		Entry:                entry,
-		GitConnected:         gitutil.HasGit(entry.LocalPath),
+		GitConnected:         gitConnected,
+		GitDetails:           gitDetails,
 		JiraConnected:        false,
 		JiraComingSoon:       true,
 		ConfluenceConnected:  false,

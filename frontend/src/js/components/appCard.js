@@ -18,10 +18,10 @@ export function renderAppCard(entry) {
   const card = document.createElement("div");
   card.className = "app-card";
 
-  const branch = entry.defaultBranch || "—";
-  const lastTouched = entry.lastTouchedAt
+  const directory = entry.localPath || "Not available";
+  const lastEdited = entry.lastTouchedAt
     ? new Date(entry.lastTouchedAt).toLocaleDateString()
-    : "—";
+    : "Not available";
 
   const anyRunning = (entry.components || []).some((c) => c.running);
   const appStatusBadge = `<span class="app-status status-${entry.status}">${capitalize(entry.status)}</span>`;
@@ -34,8 +34,8 @@ export function renderAppCard(entry) {
         <span class="app-name">${entry.name}</span>
         <p class="app-description">${entry.description || ""}</p>
         <div class="app-meta">
-          <span>branch: ${branch}</span>
-          <span>last touched: ${lastTouched}</span>
+          <span title="${directory}">directory: ${directory}</span>
+          <span>last edited: ${lastEdited}</span>
           <button class="refresh-git-btn" title="Refresh git status">&#8635;</button>
         </div>
         <div class="connection-pills"></div>
@@ -68,7 +68,7 @@ export function renderAppCard(entry) {
   });
 
   const pillsEl = card.querySelector(".connection-pills");
-  pillsEl.appendChild(renderConnectionPill("Git", entry.gitConnected, false, () => openGitPage(entry.id)));
+  pillsEl.appendChild(renderConnectionPill("Git", entry.gitConnected, false, () => openGitPage(entry.id), entry.gitDetails));
   pillsEl.appendChild(renderConnectionPill("Jira", entry.jiraConnected, entry.jiraComingSoon));
   pillsEl.appendChild(renderConnectionPill("Confluence", entry.confluenceConnected, entry.confluenceComingSoon));
 
@@ -131,7 +131,7 @@ export function renderAppCard(entry) {
   return card;
 }
 
-export function renderConnectionPill(label, connected, comingSoon, onClick) {
+export function renderConnectionPill(label, connected, comingSoon, onClick, details) {
   const pill = document.createElement("span");
   pill.className = "connection-pill";
   if (comingSoon) {
@@ -149,6 +149,43 @@ export function renderConnectionPill(label, connected, comingSoon, onClick) {
         e.stopPropagation();
         onClick();
       });
+    }
+
+    if (connected && details) {
+      pill.tabIndex = 0;
+      const wrapper = document.createElement("span");
+      wrapper.className = "connection-pill-wrap";
+      wrapper.appendChild(pill);
+
+      const popover = document.createElement("span");
+      popover.className = "git-details-popover";
+      popover.setAttribute("role", "status");
+      const rows = [
+        ["Repository", details.repositoryName],
+        ["Branch", details.branch],
+        ["Last update", details.lastUpdate ? new Date(details.lastUpdate).toLocaleString() : "Not available"],
+      ];
+      rows.forEach(([labelText, value]) => {
+        const row = document.createElement("span");
+        row.className = "git-details-row";
+        const key = document.createElement("strong");
+        key.textContent = labelText;
+        const text = document.createElement("span");
+        text.textContent = value || "Not available";
+        row.append(key, text);
+        popover.appendChild(row);
+      });
+      if (details.repoUrl) {
+        const link = document.createElement("a");
+        link.href = details.repoUrl;
+        link.target = "_blank";
+        link.rel = "noreferrer";
+        link.textContent = "Open repository";
+        link.addEventListener("click", (e) => e.stopPropagation());
+        popover.appendChild(link);
+      }
+      wrapper.appendChild(popover);
+      return wrapper;
     }
   }
   return pill;
