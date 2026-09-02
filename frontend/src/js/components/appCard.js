@@ -86,22 +86,15 @@ function renderComponentRow(appId, component) {
   const row = document.createElement("div");
   row.className = "component-row";
 
+  const leftWrap = document.createElement("div");
+  leftWrap.className = "component-left-wrap";
+
   const infoWrap = document.createElement("div");
   infoWrap.className = "component-info";
 
   const nameEl = document.createElement("span");
   nameEl.textContent = component.name;
   infoWrap.appendChild(nameEl);
-
-  if (component.running && component.url) {
-    const link = document.createElement("a");
-    link.className = "component-url";
-    link.href = component.url;
-    link.target = "_blank";
-    link.rel = "noreferrer";
-    link.textContent = `Open ${component.url}`;
-    infoWrap.appendChild(link);
-  }
 
   const buttonsWrap = document.createElement("div");
   buttonsWrap.className = "component-actions";
@@ -152,6 +145,9 @@ function renderComponentRow(appId, component) {
   buttonsWrap.appendChild(terminalBtn);
   buttonsWrap.appendChild(stopBtn);
 
+  leftWrap.appendChild(infoWrap);
+  leftWrap.appendChild(buttonsWrap);
+
   const logs = Array.isArray(component.logs) ? component.logs.slice(-8) : [];
   if (logs.length > 0 || component.running) {
     const rightSide = document.createElement("div");
@@ -161,6 +157,16 @@ function renderComponentRow(appId, component) {
     header.className = "component-status-header";
     header.textContent = component.running ? "Running" : "Last output";
     rightSide.appendChild(header);
+
+    if (component.running && component.url) {
+      const link = document.createElement("a");
+      link.className = "component-url";
+      link.href = component.url;
+      link.target = "_blank";
+      link.rel = "noreferrer";
+      link.textContent = `Open ${component.url}`;
+      rightSide.appendChild(link);
+    }
 
     if (logs.length > 0) {
       const logBlock = document.createElement("div");
@@ -179,11 +185,11 @@ function renderComponentRow(appId, component) {
       rightSide.appendChild(idle);
     }
 
+    row.appendChild(leftWrap);
     row.appendChild(rightSide);
+    return row;
   }
 
-  row.appendChild(infoWrap);
-  row.appendChild(buttonsWrap);
-
+  row.appendChild(leftWrap);
   return row;
 }
