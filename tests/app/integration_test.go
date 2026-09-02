@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 func newTestDB(t *testing.T) *db.DB {
 	t.Helper()
 
-	d, err := db.Start()
+	d, err := db.StartAt(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("starting test database: %v", err)
 	}

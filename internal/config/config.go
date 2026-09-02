@@ -11,7 +11,7 @@ type Settings struct {
 	DockerAvailable  bool   `json:"dockerAvailable"`
 }
 
-// Store persists settings as simple key/value rows in Postgres.
+// Store persists settings as simple key/value rows in SQLite.
 // TODO: GitHub token itself should move to a real secret store (OS
 // credential manager or encrypted file) rather than the settings table —
 // only whether one is set gets persisted here for now, never the token.
@@ -71,7 +71,7 @@ func (s *Store) SetGitHubToken(username string, tokenProvided bool) error {
 func (s *Store) upsert(key, value string) error {
 	_, err := s.conn.Exec(`
 		INSERT INTO settings (key, value) VALUES ($1, $2)
-		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+		ON CONFLICT (key) DO UPDATE SET value = excluded.value
 	`, key, value)
 	return err
 }

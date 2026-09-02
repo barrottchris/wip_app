@@ -92,42 +92,25 @@ Client-side routing between nav pages is a small hand-rolled router in
 `main.js` (`navigateTo()`), no framework — consistent with the rest of this
 scaffold's "no build step" approach.
 
-## Persistence (embedded Postgres) — added after app shell
+## Persistence (app-local SQLite) — added after app shell
 
-Data now persists in a real Postgres database instead of resetting on every
-restart. "Embedded" means: `internal/db/db.go` starts an actual Postgres
-binary as a subprocess when WIP starts (via `github.com/fergusstrange/
-embedded-postgres`), downloading it once and caching it after that — no
-separate Postgres install needed. Schema and SQL are genuine Postgres, so
-pointing WIP at a real hosted Postgres later is just a connection-string
-change.
+WIP stores its metadata in a persistent SQLite database at
+`%LOCALAPPDATA%\WIP\wip.db` on Windows. SQLite runs in-process, so WIP does
+not require a Postgres installation, server, port, or runtime binary
+download. The database is created and migrated automatically on startup.
 
-- `internal/db/db.go` — starts/stops the embedded Postgres process, opens
-  the connection, and runs schema migration (`CREATE TABLE IF NOT EXISTS`).
-- `internal/app/store.go` — rewritten to read/write the `apps` table via
-  `database/sql` + `github.com/lib/pq`. `Stack`, `Branches`, and
-  `Components` are stored as `JSONB` columns.
-- `internal/config/config.go` — rewritten as a simple key/value `settings`
-  table, same connection.
-- `main.go` — starts the database before the HTTP server, seeds one sample
-  app on first run only (`SeedIfEmpty`), and shuts the Postgres process
-  down cleanly on Ctrl+C.
+- `internal/db/db.go` — opens the app-local SQLite file and applies the
+  idempotent schema.
+- `internal/app/store.go` — reads and writes the `apps` table through
+  `database/sql`; list fields are stored as JSON text.
+- `internal/config/config.go` — persists settings in the SQLite `settings`
+  table.
+- `main.go` — opens the database before the HTTP server, seeds one sample
+  app on first run only (`SeedIfEmpty`), and closes the connection on exit.
 
-**Verified in this environment:** `go build` compiles cleanly with these
-changes.
-
-**Not verified here, needs checking on your machine:** actually *running*
-it — the sandbox this was built in has restricted network access and
-couldn't reach Maven Central to download the Postgres binary
-(`embedded-postgres` fetches it from there on first run). On a normal
-machine with regular internet access this should just work, but it's worth
-confirming `go run .` actually starts cleanly and creates the tables before
-building anything further on top of it.
-
-If the embedded Postgres approach turns out to be flaky in practice (slow
-first start, binary download issues, port conflicts), the fallback is
-installing Postgres normally and just pointing the same connection string
-at it — the schema and Go code don't change either way.
+The SQLite driver is `modernc.org/sqlite` and must be resolved through the
+repository's approved internal Go module source or vendored before an
+offline build.
 
 ## Onboarding ("Add app") — added after persistence
 
@@ -165,12 +148,9 @@ New pieces:
 - `frontend/src/main.js` — new `renderAddAppPage`, wired to the nav's "Add
   app" button, with the existing/new toggle and folder browser.
 
-**Verified in this environment:** `go build` and `go vet` both pass cleanly.
-The filesystem, git, and slug logic have real unit tests that pass
-(`go test ./...`). The full end-to-end flow (clicking through the actual UI
-against a live embedded Postgres) still needs confirming on your machine,
-same caveat as the persistence step — this sandbox can't reach the network
-Postgres binary download needs.
+**Verified in the repository:** the existing filesystem, git, and slug logic
+has unit-test coverage. Run `go mod tidy`, `go build`, `go vet`, and
+`go test ./...` after the approved internal module source is configured.
 
 ## Still not built
 

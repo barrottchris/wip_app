@@ -1,80 +1,50 @@
-// Package db manages an embedded Postgres instance and the schema WIP
-// stores its data in. "Embedded" here means: a real Postgres binary is
-// downloaded (once) and run locally by this Go process — no separate
-// Postgres install or server needed. The schema and SQL are genuine
-// Postgres, so pointing WIP at a real hosted Postgres later is just a
-// connection-string change, not a rewrite.
+// Package db manages WIP's persistent, app-local SQLite database.
 package db
 
 import (
 	"database/sql"
 	"fmt"
 	"os"
+	"path/filepath"
 
-	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
-	_ "github.com/lib/pq"
+	_ "modernc.org/sqlite"
 )
 
-const (
-	dbPort     = 34199 // arbitrary local port for the embedded Postgres instance
-	dbUser     = "wip"
-	dbPassword = "wip"
-	dbName     = "wip"
-)
+const databaseFileName = "wip.db"
 
-// DB wraps the embedded Postgres process and the SQL connection to it.
+// DB wraps the SQLite connection used by the application.
 type DB struct {
-	postgres   *embeddedpostgres.EmbeddedPostgres
-	Conn       *sql.DB
-	runtimeDir string
-	dataDir    string
+	Conn *sql.DB
 }
 
-// Start launches the embedded Postgres instance (downloading the binary on
-// first run only — cached after that) and returns a ready-to-use DB with
-// the schema already applied.
+// Start opens WIP's database in the current user's application data directory.
+// The directory is stable across restarts and does not require a server.
 func Start() (*DB, error) {
-	runtimeDir, err := os.MkdirTemp("", "wip-postgres-runtime-")
+	configDir, err := os.UserConfigDir()
 	if err != nil {
-		return nil, fmt.Errorf("creating postgres runtime directory: %w", err)
+		return nil, fmt.Errorf("locating user config directory: %w", err)
 	}
-	dataDir, err := os.MkdirTemp("", "wip-postgres-data-")
-	if err != nil {
-		_ = os.RemoveAll(runtimeDir)
-		return nil, fmt.Errorf("creating postgres data directory: %w", err)
-	}
+	return StartAt(filepath.Join(configDir, "WIP", databaseFileName))
+}
 
-	postgres := embeddedpostgres.NewDatabase(
-		embeddedpostgres.DefaultConfig().
-			Port(dbPort).
-			Username(dbUser).
-			Password(dbPassword).
-			Database(dbName).
-			RuntimePath(runtimeDir).
-			DataPath(dataDir),
-	)
-
-	if err := postgres.Start(); err != nil {
-		return nil, fmt.Errorf("starting embedded postgres: %w", err)
+// StartAt opens a database at path. It is also used by tests to isolate their
+// data from the user's real application database.
+func StartAt(path string) (*DB, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, fmt.Errorf("creating database directory: %w", err)
 	}
 
-	connStr := fmt.Sprintf(
-		"host=localhost port=%d user=%s password=%s dbname=%s sslmode=disable",
-		dbPort, dbUser, dbPassword, dbName,
-	)
-
-	conn, err := sql.Open("postgres", connStr)
+	conn, err := sql.Open("sqlite", path)
 	if err != nil {
-		_ = postgres.Stop()
-		return nil, fmt.Errorf("opening connection: %w", err)
+		return nil, fmt.Errorf("opening SQLite database: %w", err)
 	}
 
 	if err := conn.Ping(); err != nil {
-		_ = postgres.Stop()
-		return nil, fmt.Errorf("pinging database: %w", err)
+		_ = conn.Close()
+		return nil, fmt.Errorf("pinging SQLite database: %w", err)
 	}
 
-	d := &DB{postgres: postgres, Conn: conn, runtimeDir: runtimeDir, dataDir: dataDir}
+	d := &DB{Conn: conn}
 
 	if err := d.migrate(); err != nil {
 		_ = d.Stop()
@@ -84,24 +54,12 @@ func Start() (*DB, error) {
 	return d, nil
 }
 
-// Stop cleanly shuts down the connection and the embedded Postgres process.
-// Call this on application exit.
+// Stop closes the SQLite connection. The database file remains on disk.
 func (d *DB) Stop() error {
-	if d.Conn != nil {
-		_ = d.Conn.Close()
+	if d.Conn == nil {
+		return nil
 	}
-	if d.postgres != nil {
-		if err := d.postgres.Stop(); err != nil {
-			return err
-		}
-	}
-	if d.runtimeDir != "" {
-		_ = os.RemoveAll(d.runtimeDir)
-	}
-	if d.dataDir != "" {
-		_ = os.RemoveAll(d.dataDir)
-	}
-	return nil
+	return d.Conn.Close()
 }
 
 // migrate creates the schema if it doesn't already exist. For MVP this is
@@ -114,22 +72,18 @@ func (d *DB) migrate() error {
 			id              TEXT PRIMARY KEY,
 			name            TEXT NOT NULL,
 			description     TEXT NOT NULL DEFAULT '',
-			stack           JSONB NOT NULL DEFAULT '[]',
+			stack           TEXT NOT NULL DEFAULT '[]',
 			status          TEXT NOT NULL DEFAULT 'active',
 			notes           TEXT NOT NULL DEFAULT '',
 			local_path      TEXT NOT NULL DEFAULT '',
 			repo_url        TEXT NOT NULL DEFAULT '',
 			default_branch  TEXT NOT NULL DEFAULT '',
-			branches        JSONB NOT NULL DEFAULT '[]',
-			components      JSONB NOT NULL DEFAULT '[]',
-			created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-			last_touched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-			archived        BOOLEAN NOT NULL DEFAULT false
+			branches        TEXT NOT NULL DEFAULT '[]',
+			components      TEXT NOT NULL DEFAULT '[]',
+			created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			last_touched_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			archived        BOOLEAN NOT NULL DEFAULT 0
 		);
-
-		-- Idempotent: covers anyone who already had a database from before
-		-- archiving existed, without needing a real migration tool yet.
-		ALTER TABLE apps ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT false;
 
 		CREATE TABLE IF NOT EXISTS settings (
 			key   TEXT PRIMARY KEY,

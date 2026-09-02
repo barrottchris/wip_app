@@ -25,14 +25,12 @@ type Server struct {
 }
 
 func main() {
-	fmt.Println("Starting embedded Postgres (first run downloads the binary — may take a moment)...")
+	fmt.Println("Opening local SQLite database...")
 	database, err := db.Start()
 	if err != nil {
 		log.Fatalf("failed to start database: %v", err)
 	}
-	// Ensure the embedded Postgres process is stopped cleanly on exit,
-	// including on Ctrl+C — leaving it running would leak a process and
-	// hold the port on next start.
+	// Ensure the database connection is closed cleanly on exit.
 	defer database.Stop()
 	handleGracefulShutdown(database)
 
@@ -71,9 +69,9 @@ func main() {
 	log.Fatal(http.ListenAndServe(addr, mux))
 }
 
-// handleGracefulShutdown stops the embedded Postgres process on Ctrl+C /
-// SIGTERM, not just on normal return from main(), since log.Fatal from the
-// HTTP server would otherwise skip the deferred Stop().
+// handleGracefulShutdown closes the database on Ctrl+C / SIGTERM, not just on
+// normal return from main(), since log.Fatal from the HTTP server would
+// otherwise skip the deferred Stop().
 func handleGracefulShutdown(database *db.DB) {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)

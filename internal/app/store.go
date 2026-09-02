@@ -10,7 +10,7 @@ import (
 	"wip/internal/gitutil"
 )
 
-// Store persists App Entries in Postgres (see internal/db). Replaces the
+// Store persists App Entries in SQLite (see internal/db). Replaces the
 // earlier in-memory placeholder — data now survives a restart.
 type Store struct {
 	conn *sql.DB
