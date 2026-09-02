@@ -16,9 +16,14 @@ export async function renderFolderPicker(containerEl, path, options = {}) {
 
     const currentRow = document.createElement("div");
     currentRow.className = "folder-current-row";
-    currentRow.innerHTML = `<span>${listing.currentPath}</span>`;
+
+    const currentPath = document.createElement("span");
+    currentPath.className = "folder-current-path";
+    currentPath.textContent = listing.currentPath || "Current folder";
+    currentRow.appendChild(currentPath);
 
     const selectBtn = document.createElement("button");
+    selectBtn.className = "folder-select-btn";
     selectBtn.textContent = selectButtonLabel;
     selectBtn.addEventListener("click", () => onSelect?.(listing.currentPath));
     currentRow.appendChild(selectBtn);
@@ -28,11 +33,12 @@ export async function renderFolderPicker(containerEl, path, options = {}) {
     list.className = "folder-list";
 
     if (listing.parentPath) {
-      const upRow = document.createElement("div");
-      upRow.className = "folder-row";
-      upRow.textContent = ".. (up)";
-      upRow.addEventListener("click", () => renderFolderPicker(containerEl, listing.parentPath, options));
-      list.appendChild(upRow);
+      const upButton = document.createElement("button");
+      upButton.type = "button";
+      upButton.className = "folder-nav-btn";
+      upButton.innerHTML = '<span class="folder-nav-icon" aria-hidden="true">↑</span><span>Up a level</span>';
+      upButton.addEventListener("click", () => renderFolderPicker(containerEl, listing.parentPath, options));
+      list.appendChild(upButton);
     }
 
     (listing.directories || []).forEach((dir) => {

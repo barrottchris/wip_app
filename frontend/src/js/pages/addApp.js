@@ -30,9 +30,24 @@ export async function renderAddAppPage(container) {
     <label>Description</label>
     <input type="text" id="new-app-description" placeholder="What is this app?" />
 
-    <label id="folder-label">Choose an existing folder</label>
-    <div id="folder-picker"></div>
-    <p class="hint" id="selected-path-hint"></p>
+    <div class="folder-selection-panel">
+      <div class="folder-selection-header">
+        <div>
+          <h3>Folder selection</h3>
+          <p>Choose the folder this app will live in.</p>
+        </div>
+      </div>
+
+      <div class="selected-folder-summary">
+        <span class="selected-folder-label">Selected folder</span>
+        <div id="selected-path-hint" class="selected-path-hint">Not selected yet</div>
+      </div>
+
+      <div class="folder-picker-shell">
+        <label id="folder-label">Choose an existing folder</label>
+        <div id="folder-picker"></div>
+      </div>
+    </div>
 
     <div id="git-prompt" style="display:none;" class="git-prompt">
       <p>This folder isn't under git yet. Initialize it?</p>
@@ -48,7 +63,7 @@ export async function renderAddAppPage(container) {
   const pickerEl = wrapper.querySelector("#folder-picker");
   const pickerOptions = {
     get selectButtonLabel() {
-      return addAppState.mode === "existing" ? "Select this folder" : "Create here";
+      return addAppState.mode === "existing" ? "Use this folder" : "Create here";
     },
     onBrowse: (path) => {
       addAppState.browsePath = path;
@@ -114,7 +129,7 @@ function updateCreateButtonState(wrapper) {
 
 async function selectFolder(wrapper, path) {
   addAppState.selectedPath = path;
-  wrapper.querySelector("#selected-path-hint").textContent = `Selected: ${path}`;
+  wrapper.querySelector("#selected-path-hint").textContent = path;
   updateCreateButtonState(wrapper);
 
   if (addAppState.mode === "existing") {

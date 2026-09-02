@@ -6,7 +6,6 @@
 
 let pages = {};
 let currentPageName = null;
-let registryPollTimer = null;
 
 export function setPages(pageMap) {
   pages = pageMap;
@@ -18,11 +17,6 @@ export function setPages(pageMap) {
 export let selectedAppId = null;
 
 export function navigateTo(pageName) {
-  if (registryPollTimer) {
-    clearInterval(registryPollTimer);
-    registryPollTimer = null;
-  }
-
   document.querySelectorAll(".nav-item").forEach((el) => {
     el.classList.toggle("active", el.dataset.page === pageName);
   });
@@ -31,14 +25,6 @@ export function navigateTo(pageName) {
   content.innerHTML = "";
   const renderFn = pages[pageName] || pages["registry"];
   renderFn(content);
-
-  if (pageName === "registry") {
-    registryPollTimer = setInterval(() => {
-      if (currentPageName === "registry") {
-        refreshCurrentPage();
-      }
-    }, 2000);
-  }
 }
 
 // Re-render whatever page is currently showing — used after an action

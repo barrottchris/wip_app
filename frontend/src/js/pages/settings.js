@@ -50,7 +50,9 @@ function buildSettingsForm(settings) {
       githubToken: wrapper.querySelector("#github-token").value,
     };
     await updateSettings(body);
-    wrapper.querySelector("#save-status").textContent = "Saved.";
+    const statusEl = wrapper.querySelector("#save-status");
+    statusEl.className = "status-pill status-success";
+    statusEl.textContent = "Saved";
   };
 
   return wrapper;

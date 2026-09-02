@@ -49,10 +49,15 @@ export async function renderAppDetailPage(container) {
     </select>
     <p class="hint">This is separate from whether it's actually running right now — that's shown live above, based on its components.</p>
 
-    <label>Folder</label>
-    <p class="hint" id="current-path-display">${escapeAttr(entry.localPath)}</p>
-    <button id="change-folder-btn">Change folder</button>
-    <div id="edit-folder-picker" style="display:none; margin-top:0.5rem;"></div>
+    <div id="folder-section" class="detail-section folder-panel">
+      <h2>Folder</h2>
+      <div class="selected-folder-summary">
+        <span class="selected-folder-label">Current path</span>
+        <div id="current-path-display" class="selected-path-hint">${escapeAttr(entry.localPath)}</div>
+      </div>
+      <button id="change-folder-btn">Change folder</button>
+      <div id="edit-folder-picker" style="display:none; margin-top:0.75rem;"></div>
+    </div>
 
     <div id="components-section" class="detail-section">
       <h2>Components</h2>
@@ -98,12 +103,19 @@ export async function renderAppDetailPage(container) {
     const statusMsgEl = wrapper.querySelector("#components-status-msg");
 
     if (components.some((c) => !c.name)) {
+      statusMsgEl.className = "status-pill status-error";
       statusMsgEl.textContent = "Every component needs a name.";
       return;
     }
 
     const res = await updateComponents(entry.id, components);
-    statusMsgEl.textContent = res.ok ? "Saved." : `Error: ${await res.text()}`;
+    if (res.ok) {
+      statusMsgEl.className = "status-pill status-success";
+      statusMsgEl.textContent = "Saved";
+    } else {
+      statusMsgEl.className = "status-pill status-error";
+      statusMsgEl.textContent = `Error: ${await res.text()}`;
+    }
   });
 
   wrapper.querySelector("#edit-status").value = entry.status;
@@ -159,10 +171,15 @@ export async function renderAppDetailPage(container) {
     const putRes = await updateApp(entry.id, { name, description, localPath: editState.selectedPath, status });
 
     if (putRes.ok) {
-      navigateTo("registry");
+      const statusEl = wrapper.querySelector("#edit-status-msg");
+      statusEl.className = "status-pill status-success";
+      statusEl.textContent = "Saved";
+      setTimeout(() => navigateTo("registry"), 350);
     } else {
       const errText = await putRes.text();
-      wrapper.querySelector("#edit-status-msg").textContent = `Error: ${errText}`;
+      const statusEl = wrapper.querySelector("#edit-status-msg");
+      statusEl.className = "status-pill status-error";
+      statusEl.textContent = `Error: ${errText}`;
     }
   });
 }

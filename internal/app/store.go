@@ -280,14 +280,14 @@ func (s *Store) SeedIfEmpty() error {
 		Description:   "Geography-based word game",
 		Stack:         []string{"Node.js"},
 		Status:        StatusActive,
-		LocalPath:     `C:\Dev\WIP\bordle`,
+		LocalPath:     `C:\bordle`,
 		RepoURL:       "https://github.com/example/bordle",
 		DefaultBranch: "main",
 		Branches: []Branch{
 			{Name: "main", LastCommitAt: now.Add(-48 * time.Hour), IsDefault: true},
 		},
 		Components: []Component{
-			{Name: "App", StartCommand: "npm start", StopCommand: "", RunMode: RunModeNative},
+			{Name: "App", StartCommand: "python .\\app.py", StopCommand: "", RunMode: RunModeNative},
 		},
 	})
 }

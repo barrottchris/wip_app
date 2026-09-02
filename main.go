@@ -305,8 +305,11 @@ func openComponentTerminal(appPath string, component app.Component) error {
 		return fmt.Errorf("component %q has no start command", component.Name)
 	}
 	cmdLine := app.BuildTerminalCommand(appPath, component)
-	cmd := exec.Command("cmd.exe", "/C", cmdLine)
-	return cmd.Run()
+	cmd := exec.Command("cmd.exe", "/K", cmdLine)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("opening terminal for %q: %w", component.Name, err)
+	}
+	return nil
 }
 
 // handleAppSubroutes is a very simple manual router for MVP purposes.

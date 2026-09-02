@@ -426,15 +426,9 @@ func BuildTerminalCommand(appPath string, component Component) string {
 		return command
 	}
 	if command == "" {
-		return fmt.Sprintf("cd /d \"%s\"", appPath)
+		return fmt.Sprintf("cd /d \"%s\" && title %s", appPath, component.Name)
 	}
-	return fmt.Sprintf("start \"%s\" cmd.exe /K " +
-		"cd /d \"%s\" && title %s && %s",
-		component.Name,
-		appPath,
-		component.Name,
-		command,
-	)
+	return fmt.Sprintf("cd /d \"%s\" && title %s && %s", appPath, component.Name, command)
 }
 
 // terminateProcessTree kills the tracked process and its children on Windows using taskkill.
