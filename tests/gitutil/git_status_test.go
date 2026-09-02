@@ -1,6 +1,10 @@
 package gitutil
 
-import "testing"
+import (
+	"testing"
+
+	"wip/internal/gitutil"
+)
 
 func TestRepositoryName(t *testing.T) {
 	tests := []struct {
@@ -16,7 +20,7 @@ func TestRepositoryName(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := RepositoryName(test.remoteURL, test.path); got != test.want {
+			if got := gitutil.RepositoryName(test.remoteURL, test.path); got != test.want {
 				t.Fatalf("RepositoryName(%q, %q) = %q; want %q", test.remoteURL, test.path, got, test.want)
 			}
 		})

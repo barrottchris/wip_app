@@ -1,4 +1,4 @@
-package app
+package app_test
 
 import (
 	"os"
@@ -6,15 +6,17 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"wip/internal/app"
 )
 
 func TestProcessManagerStartsAndStopsNativeProcess(t *testing.T) {
-	pm := NewProcessManager()
+	pm := app.NewProcessManager()
 	tempDir := t.TempDir()
-	component := Component{
+	component := app.Component{
 		Name:         "Server",
 		StartCommand: "ping -n 20 127.0.0.1 >NUL",
-		RunMode:      RunModeNative,
+		RunMode:      app.RunModeNative,
 	}
 
 	if err := pm.Start("app-1", tempDir, component); err != nil {
@@ -35,7 +37,7 @@ func TestProcessManagerStartsAndStopsNativeProcess(t *testing.T) {
 }
 
 func TestProcessManagerOpenTerminalRequiresRunningSession(t *testing.T) {
-	pm := NewProcessManager()
+	pm := app.NewProcessManager()
 
 	if err := pm.OpenTerminal("missing-app", "Server"); err == nil {
 		t.Fatal("expected opening a missing terminal session to fail")
@@ -43,12 +45,12 @@ func TestProcessManagerOpenTerminalRequiresRunningSession(t *testing.T) {
 }
 
 func TestProcessManagerRejectsDuplicateStart(t *testing.T) {
-	pm := NewProcessManager()
+	pm := app.NewProcessManager()
 	tempDir := t.TempDir()
-	component := Component{
+	component := app.Component{
 		Name:         "Server",
 		StartCommand: "ping -n 20 127.0.0.1 >NUL",
-		RunMode:      RunModeNative,
+		RunMode:      app.RunModeNative,
 	}
 
 	if err := pm.Start("app-duplicate", tempDir, component); err != nil {
@@ -69,14 +71,14 @@ func TestProcessManagerRejectsDuplicateStart(t *testing.T) {
 }
 
 func TestProcessManagerUsesConfiguredStopCommand(t *testing.T) {
-	pm := NewProcessManager()
+	pm := app.NewProcessManager()
 	tempDir := t.TempDir()
 	markerPath := filepath.Join(tempDir, "stop-marker.txt")
-	component := Component{
+	component := app.Component{
 		Name:         "Server",
 		StartCommand: "ping -n 1 127.0.0.1 >NUL",
 		StopCommand:  "echo stopped > " + markerPath,
-		RunMode:      RunModeNative,
+		RunMode:      app.RunModeNative,
 	}
 
 	if err := pm.Start("app-2", tempDir, component); err != nil {
@@ -92,11 +94,11 @@ func TestProcessManagerUsesConfiguredStopCommand(t *testing.T) {
 }
 
 func TestProcessManagerRejectsMissingAppDirectory(t *testing.T) {
-	pm := NewProcessManager()
-	component := Component{
+	pm := app.NewProcessManager()
+	component := app.Component{
 		Name:         "App",
 		StartCommand: "npm start",
-		RunMode:      RunModeNative,
+		RunMode:      app.RunModeNative,
 	}
 
 	if err := pm.Start("missing-dir", filepath.Join(t.TempDir(), "ghost-project"), component); err == nil {
@@ -105,7 +107,7 @@ func TestProcessManagerRejectsMissingAppDirectory(t *testing.T) {
 }
 
 func TestProcessManagerCapturesEarlyExitOutput(t *testing.T) {
-	pm := NewProcessManager()
+	pm := app.NewProcessManager()
 	tempDir := t.TempDir()
 	scriptPath := filepath.Join(tempDir, "exit_script.py")
 	script := "import sys\nprint(\"hello stdout\")\nsys.stderr.write(\"hello stderr\\n\")\nraise SystemExit(3)\n"
@@ -113,10 +115,10 @@ func TestProcessManagerCapturesEarlyExitOutput(t *testing.T) {
 		t.Fatalf("write temp script: %v", err)
 	}
 
-	component := Component{
+	component := app.Component{
 		Name:         "App",
 		StartCommand: "python exit_script.py",
-		RunMode:      RunModeNative,
+		RunMode:      app.RunModeNative,
 	}
 
 	if err := pm.Start("app-logs", tempDir, component); err != nil {
@@ -145,7 +147,7 @@ func TestInferBrowseURLFromLogs(t *testing.T) {
 		"Network: http://0.0.0.0:3000",
 	}
 
-	if got := InferBrowseURLFromLogs(logs); got != "http://localhost:3000" {
+	if got := app.InferBrowseURLFromLogs(logs); got != "http://localhost:3000" {
 		t.Fatalf("InferBrowseURLFromLogs() = %q, want %q", got, "http://localhost:3000")
 	}
 }
@@ -164,8 +166,8 @@ func TestInferBrowseURL(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			component := Component{Name: "Server", StartCommand: tc.command}
-			if got := InferBrowseURL(component); got != tc.expected {
+				component := app.Component{Name: "Server", StartCommand: tc.command}
+				if got := app.InferBrowseURL(component); got != tc.expected {
 				t.Fatalf("InferBrowseURL(%q) = %q, want %q", tc.command, got, tc.expected)
 			}
 		})
@@ -174,7 +176,7 @@ func TestInferBrowseURL(t *testing.T) {
 
 func TestBuildTerminalCommandUsesAppDirectoryAndComponentName(t *testing.T) {
 	appPath := `C:\work\demo-app`
-	cmd := BuildTerminalCommand(appPath, Component{Name: "Frontend", StartCommand: "npm run dev"})
+	cmd := app.BuildTerminalCommand(appPath, app.Component{Name: "Frontend", StartCommand: "npm run dev"})
 
 	if !strings.Contains(cmd, `cd /d "C:\work\demo-app"`) {
 		t.Fatalf("terminal command should cd into app directory, got %q", cmd)
