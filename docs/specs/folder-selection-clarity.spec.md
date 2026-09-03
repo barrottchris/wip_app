@@ -9,7 +9,7 @@ last_updated: 2026-09-03
 
 ## Context
 - WIP is designed as a local, single-user app registry for organizing in-progress apps, per `docs/overview.md`, `docs/mvp-scope.md`, and `docs/architecture.md`.
-- The onboarding flow in `frontend/src/js/pages/addApp.js` is the point where a user selects a folder and confirms the app location before creating the app record.
+- The onboarding flow in `frontend/src/js/pages/addApp.js` and the existing-app edit flow in `frontend/src/js/pages/appDetail.js` are the points where a user selects or changes an app folder.
 - The existing flow showed the folder browser inline with form fields and did not present a clear, dedicated “selected folder” summary, which made the action feel loose and not obviously persisted.
 - The folder browser currently requires navigating one directory at a time, although the existing browse endpoint can already resolve a supplied path.
 
@@ -43,6 +43,7 @@ last_updated: 2026-09-03
 - The user can clearly see the selected folder before clicking Add app.
 - The folder selection UI still supports browsing and choosing a folder path.
 - A directly entered valid path opens in the browser and can be confirmed as the selected folder.
+- The existing-app edit page offers the same direct lookup and explicit confirmation when changing folders.
 - An invalid path gives clear feedback and does not silently select it.
 - The relevant repository tests pass after the UX adjustment.
 
@@ -50,3 +51,4 @@ last_updated: 2026-09-03
 - 2026-09-02 — `completed` — folder selection was made explicit in the add-app flow and verified with the relevant tests.
 - 2026-09-03 — `todo` — direct folder-path lookup requested; awaiting confirmation of lookup trigger.
 - 2026-09-03 — `in-progress` — approved: add a Find folder button that validates and browses the entered path before selection can be confirmed.
+- 2026-09-03 — `in-progress` — extended direct lookup to the existing app edit page.

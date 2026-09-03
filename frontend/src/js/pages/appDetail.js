@@ -56,7 +56,15 @@ export async function renderAppDetailPage(container) {
         <div id="current-path-display" class="selected-path-hint">${escapeAttr(entry.localPath)}</div>
       </div>
       <button id="change-folder-btn">Change folder</button>
-      <div id="edit-folder-picker" style="display:none; margin-top:0.75rem;"></div>
+      <div id="edit-folder-picker" class="folder-picker-shell" style="display:none; margin-top:0.75rem;">
+        <label for="edit-folder-path-input">Find a different folder</label>
+        <div class="folder-path-search">
+          <input type="text" id="edit-folder-path-input" placeholder="C:\\path\\to\\folder" />
+          <button type="button" id="edit-find-folder-btn">Find folder</button>
+        </div>
+        <p id="edit-folder-search-status" class="hint"></p>
+        <div id="edit-folder-browser"></div>
+      </div>
     </div>
 
     <div id="components-section" class="detail-section">
@@ -130,8 +138,15 @@ export async function renderAppDetailPage(container) {
     const pickerEl = wrapper.querySelector("#edit-folder-picker");
     pickerEl.style.display = editState.browsing ? "block" : "none";
     if (editState.browsing) {
-      await renderFolderPicker(pickerEl, editState.selectedPath, {
-        selectButtonLabel: "Select this folder",
+      const browserEl = wrapper.querySelector("#edit-folder-browser");
+      const pathInput = wrapper.querySelector("#edit-folder-path-input");
+      pathInput.value = editState.selectedPath;
+      await renderFolderPicker(browserEl, editState.selectedPath, {
+        selectButtonLabel: "Use this folder",
+        onBrowse: (path) => {
+          pathInput.value = path;
+          wrapper.querySelector("#edit-folder-search-status").textContent = "";
+        },
         onSelect: (path) => {
           editState.selectedPath = path;
           wrapper.querySelector("#current-path-display").textContent = path;
@@ -139,6 +154,36 @@ export async function renderAppDetailPage(container) {
           editState.browsing = false;
         },
       });
+    }
+  });
+
+  wrapper.querySelector("#edit-find-folder-btn").addEventListener("click", async () => {
+    const path = wrapper.querySelector("#edit-folder-path-input").value.trim();
+    const statusEl = wrapper.querySelector("#edit-folder-search-status");
+    if (!path) {
+      statusEl.className = "hint folder-search-error";
+      statusEl.textContent = "Enter a folder path first.";
+      return;
+    }
+
+    statusEl.className = "hint";
+    statusEl.textContent = "Checking folder...";
+    await renderFolderPicker(wrapper.querySelector("#edit-folder-browser"), path, {
+      selectButtonLabel: "Use this folder",
+      onBrowse: (foundPath) => {
+        wrapper.querySelector("#edit-folder-path-input").value = foundPath;
+        statusEl.textContent = "";
+      },
+      onSelect: (foundPath) => {
+        editState.selectedPath = foundPath;
+        wrapper.querySelector("#current-path-display").textContent = foundPath;
+        wrapper.querySelector("#edit-folder-picker").style.display = "none";
+        editState.browsing = false;
+      },
+    });
+    if (wrapper.querySelector("#edit-folder-browser").textContent === "Could not browse this location.") {
+      statusEl.className = "hint folder-search-error";
+      statusEl.textContent = "Folder not found or unavailable.";
     }
   });
 
