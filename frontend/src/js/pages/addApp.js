@@ -45,6 +45,11 @@ export async function renderAddAppPage(container) {
 
       <div class="folder-picker-shell">
         <label id="folder-label">Choose an existing folder</label>
+        <div class="folder-path-search">
+          <input type="text" id="folder-path-input" placeholder="C:\\path\\to\\folder" />
+          <button type="button" id="find-folder-btn">Find folder</button>
+        </div>
+        <p id="folder-search-status" class="hint"></p>
         <div id="folder-picker"></div>
       </div>
     </div>
@@ -67,6 +72,8 @@ export async function renderAddAppPage(container) {
     },
     onBrowse: (path) => {
       addAppState.browsePath = path;
+      wrapper.querySelector("#folder-path-input").value = path;
+      wrapper.querySelector("#folder-search-status").textContent = "";
     },
     onSelect: (path) => selectFolder(wrapper, path),
   };
@@ -82,6 +89,8 @@ export async function renderAddAppPage(container) {
           ? "Choose an existing folder"
           : "Choose where to create the new folder";
       wrapper.querySelector("#selected-path-hint").textContent = "";
+      wrapper.querySelector("#folder-path-input").value = addAppState.browsePath;
+      wrapper.querySelector("#folder-search-status").textContent = "";
       wrapper.querySelector("#git-prompt").style.display = "none";
       updateCreateButtonState(wrapper);
       renderFolderPicker(pickerEl, addAppState.browsePath, pickerOptions);
@@ -89,6 +98,24 @@ export async function renderAddAppPage(container) {
   });
 
   wrapper.querySelector("#new-app-name").addEventListener("input", () => updateCreateButtonState(wrapper));
+
+  wrapper.querySelector("#find-folder-btn").addEventListener("click", async () => {
+    const path = wrapper.querySelector("#folder-path-input").value.trim();
+    const statusEl = wrapper.querySelector("#folder-search-status");
+    if (!path) {
+      statusEl.className = "hint folder-search-error";
+      statusEl.textContent = "Enter a folder path first.";
+      return;
+    }
+
+    statusEl.className = "hint";
+    statusEl.textContent = "Checking folder...";
+    await renderFolderPicker(pickerEl, path, pickerOptions);
+    if (pickerEl.textContent === "Could not browse this location.") {
+      statusEl.className = "hint folder-search-error";
+      statusEl.textContent = "Folder not found or unavailable.";
+    }
+  });
 
   wrapper.querySelector("#git-init-yes").addEventListener("click", async () => {
     await gitInit(addAppState.selectedPath);

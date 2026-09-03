@@ -673,6 +673,38 @@ button:hover {
   color: #b7c0d1;
 }
 
+.folder-path-search {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.folder-path-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.45rem 0.55rem;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  color: #eee;
+  font-size: 0.85rem;
+}
+
+.folder-path-search input:focus {
+  outline: none;
+  border-color: #5a6f91;
+}
+
+#find-folder-btn {
+  white-space: nowrap;
+  background: #2f4f73;
+  border-color: #466d9f;
+}
+
+.folder-search-error {
+  color: #f3b0b0;
+}
+
 #folder-picker {
   background: #171717;
   border: 1px solid #3a3a3a;
