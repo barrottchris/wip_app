@@ -138,3 +138,11 @@ export async function listActivity(filters = {}) {
   const events = await res.json();
   return Array.isArray(events) ? events : [];
 }
+
+export function saveRegistryOrder(ids) {
+  return fetch("/api/apps/order", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids }),
+  });
+}

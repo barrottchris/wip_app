@@ -1,6 +1,9 @@
 import { capitalize } from "../utils.js";
 import { getApp, openComponentTerminal, openFolder, startComponent, stopComponent } from "../api.js";
 import { openAppDetail, openGitPage, refreshCurrentPage } from "../router.js";
+import { notifyRuntimeChanged } from "../runtimeEvents.js";
+
+const collapsedAppIds = new Set();
 
 async function refreshCard(card, appId) {
   try {
@@ -17,6 +20,8 @@ async function refreshCard(card, appId) {
 export function renderAppCard(entry) {
   const card = document.createElement("div");
   card.className = "app-card";
+  card.dataset.appId = entry.id;
+  if (collapsedAppIds.has(entry.id)) card.classList.add("is-collapsed");
 
   const directory = entry.localPath || "Not available";
   const lastEdited = entry.lastTouchedAt
@@ -31,7 +36,9 @@ export function renderAppCard(entry) {
   card.innerHTML = `
     <div class="app-card-header">
       <div class="app-card-main">
-        <span class="app-name">${entry.name}</span>
+        <div class="app-name-row">
+          <span class="app-name">${entry.name}</span>
+        </div>
         <p class="app-description">${entry.description || ""}</p>
         <div class="app-meta">
           <a href="#" class="folder-link" title="Open folder in File Explorer"></a>
@@ -42,14 +49,33 @@ export function renderAppCard(entry) {
       </div>
       <div class="app-card-terminal-slot"></div>
       <div class="app-card-status-panel">
-        ${appStatusBadge}
-        ${runtimeStatusBadge}
+        <div class="app-status-row">
+          ${appStatusBadge}
+          ${runtimeStatusBadge}
+          <button class="card-collapse-toggle" type="button" aria-expanded="${!collapsedAppIds.has(entry.id)}">Collapse</button>
+        </div>
         <div class="app-url-slot"></div>
       </div>
     </div>
   `;
 
   updateAppUrl(card, runningUrl);
+
+  const collapseButton = card.querySelector(".card-collapse-toggle");
+  const updateCollapseButton = () => {
+    const collapsed = card.classList.contains("is-collapsed");
+    collapseButton.textContent = collapsed ? "Expand" : "Collapse";
+    collapseButton.setAttribute("aria-expanded", String(!collapsed));
+    collapseButton.setAttribute("aria-label", `${collapsed ? "Expand" : "Collapse"} ${entry.name} card`);
+  };
+  collapseButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const collapsed = card.classList.toggle("is-collapsed");
+    if (collapsed) collapsedAppIds.add(entry.id);
+    else collapsedAppIds.delete(entry.id);
+    updateCollapseButton();
+  });
+  updateCollapseButton();
 
   const folderLink = card.querySelector(".folder-link");
   folderLink.textContent = `Folder directory: ${directory}`;
@@ -108,6 +134,7 @@ export function renderAppCard(entry) {
         alert(`Could not start ${component.name}: ${text || "unknown server error"}`);
         return;
       }
+      notifyRuntimeChanged();
       await refreshCard(card, entry.id);
     };
 
@@ -120,6 +147,7 @@ export function renderAppCard(entry) {
         alert(`Could not stop ${component.name}: ${text || "unknown server error"}`);
         return;
       }
+      notifyRuntimeChanged();
       await refreshCard(card, entry.id);
     };
 

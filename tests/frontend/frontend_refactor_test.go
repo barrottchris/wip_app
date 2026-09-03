@@ -56,3 +56,29 @@ func TestArchiveWarningUsesInAppPrompt(t *testing.T) {
 		t.Fatal("archive flow must render an in-app confirmation panel")
 	}
 }
+
+func TestRegistrySupportsOrderingAndCollapsedCards(t *testing.T) {
+	registryFile := filepath.Join("..", "..", "frontend", "src", "js", "pages", "registry.js")
+	registryContent, err := os.ReadFile(registryFile)
+	if err != nil {
+		t.Fatalf("missing registry page: %v", err)
+	}
+	registryText := string(registryContent)
+	for _, required := range []string{"draggable = true", "dragover", "saveRegistryOrder"} {
+		if !strings.Contains(registryText, required) {
+			t.Fatalf("registry page must contain %q", required)
+		}
+	}
+
+	cardFile := filepath.Join("..", "..", "frontend", "src", "js", "components", "appCard.js")
+	cardContent, err := os.ReadFile(cardFile)
+	if err != nil {
+		t.Fatalf("missing app card: %v", err)
+	}
+	cardText := string(cardContent)
+	for _, required := range []string{"card-collapse-toggle", "is-collapsed", "aria-expanded"} {
+		if !strings.Contains(cardText, required) {
+			t.Fatalf("app card must contain %q", required)
+		}
+	}
+}

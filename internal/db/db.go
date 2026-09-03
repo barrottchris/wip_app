@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -82,7 +83,8 @@ func (d *DB) migrate() error {
 			components      TEXT NOT NULL DEFAULT '[]',
 			created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			last_touched_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			archived        BOOLEAN NOT NULL DEFAULT 0
+			archived        BOOLEAN NOT NULL DEFAULT 0,
+			registry_order  INTEGER NOT NULL DEFAULT 0
 		);
 
 		CREATE TABLE IF NOT EXISTS settings (
@@ -106,5 +108,12 @@ func (d *DB) migrate() error {
 			detail          TEXT NOT NULL DEFAULT ''
 		);
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+	_, err = d.Conn.Exec(`ALTER TABLE apps ADD COLUMN registry_order INTEGER NOT NULL DEFAULT 0`)
+	if err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return err
+	}
+	return nil
 }

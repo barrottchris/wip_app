@@ -10,6 +10,7 @@ import (
 	"wip/internal/db"
 )
 
+// newTestDB opens an isolated SQLite database for an integration test.
 func newTestDB(t *testing.T) *db.DB {
 	t.Helper()
 
@@ -27,6 +28,7 @@ func newTestDB(t *testing.T) *db.DB {
 	return d
 }
 
+// TestConfigStorePersistsSettings verifies settings survive store operations.
 func TestConfigStorePersistsSettings(t *testing.T) {
 	d := newTestDB(t)
 	store := config.NewStore(d.Conn)
@@ -77,6 +79,7 @@ func TestConfigStorePersistsSettings(t *testing.T) {
 	}
 }
 
+// TestStoreCreateAndListAppRoundTrip verifies app metadata persistence.
 func TestStoreCreateAndListAppRoundTrip(t *testing.T) {
 	d := newTestDB(t)
 	store := app.NewStore(d.Conn)
@@ -162,6 +165,38 @@ func TestStoreCreateAndListAppRoundTrip(t *testing.T) {
 	}
 }
 
+// TestStoreSavesRegistryOrderForActiveApps verifies active-app ordering rules.
+func TestStoreSavesRegistryOrderForActiveApps(t *testing.T) {
+	d := newTestDB(t)
+	store := app.NewStore(d.Conn)
+	for _, id := range []string{"first", "second", "third"} {
+		if err := store.CreateApp(app.Entry{ID: id, Name: id, Status: app.StatusActive}); err != nil {
+			t.Fatalf("CreateApp(%q) failed: %v", id, err)
+		}
+	}
+
+	if err := store.SaveRegistryOrder([]string{"third", "first", "second"}); err != nil {
+		t.Fatalf("SaveRegistryOrder() failed: %v", err)
+	}
+	apps, err := store.ListApps()
+	if err != nil {
+		t.Fatalf("ListApps() after reorder failed: %v", err)
+	}
+	for index, want := range []string{"third", "first", "second"} {
+		if apps[index].ID != want {
+			t.Fatalf("apps[%d].ID = %q; want %q", index, apps[index].ID, want)
+		}
+	}
+
+	if err := store.ArchiveApp("second"); err != nil {
+		t.Fatalf("ArchiveApp() failed: %v", err)
+	}
+	if err := store.SaveRegistryOrder([]string{"third", "second", "first"}); err == nil {
+		t.Fatal("SaveRegistryOrder() accepted an archived app")
+	}
+}
+
+// TestStoreActivityRoundTripAndFilters verifies activity persistence and filters.
 func TestStoreActivityRoundTripAndFilters(t *testing.T) {
 	d := newTestDB(t)
 	store := app.NewStore(d.Conn)
@@ -185,6 +220,7 @@ func TestStoreActivityRoundTripAndFilters(t *testing.T) {
 	}
 }
 
+// TestStoreActivityEmptyResultIsNonNil verifies empty activity results are usable.
 func TestStoreActivityEmptyResultIsNonNil(t *testing.T) {
 	d := newTestDB(t)
 	store := app.NewStore(d.Conn)

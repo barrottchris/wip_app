@@ -35,7 +35,12 @@ func (s *Server) handleCreateApp(w http.ResponseWriter, r *http.Request) {
 
 // handleAppSubroutes dispatches requests for one app and its component actions.
 func (s *Server) handleAppSubroutes(w http.ResponseWriter, r *http.Request) {
-	path := r.URL.Path[len("/api/apps/"):]; id, action := path, ""; for i, character := range path { if character == '/' { id, action = path[:i], path[i+1:]; break } }
+	path := r.URL.Path[len("/api/apps/"):] 
+	if path == "order" {
+		s.handleSaveRegistryOrder(w, r)
+		return
+	}
+	id, action := path, ""; for i, character := range path { if character == '/' { id, action = path[:i], path[i+1:]; break } }
 	switch action {
 	case "":
 		switch r.Method { case http.MethodGet: entry, err := s.store.GetApp(id); if err != nil { http.Error(w, err.Error(), http.StatusNotFound); return }; writeJSON(w, s.withConnections(entry)); case http.MethodPut: s.handleUpdateApp(w, r, id); default: http.Error(w, "method not allowed", http.StatusMethodNotAllowed) }
@@ -62,4 +67,22 @@ func (s *Server) handleUpdateApp(w http.ResponseWriter, r *http.Request, id stri
 func (s *Server) handleArchiveApp(w http.ResponseWriter, r *http.Request, id string) {
 	var body struct { DeleteFolder bool `json:"deleteFolder"` }; _ = json.NewDecoder(r.Body).Decode(&body); entry, err := s.store.GetApp(id); if err != nil { http.Error(w, err.Error(), http.StatusNotFound); return }
 	if err := s.store.ArchiveApp(id); err != nil { s.recordActivity(entry, "app.archived", "Archived app", entry.DefaultBranch, "", "stopped", "Archive failed", "failure", err.Error()); http.Error(w, err.Error(), http.StatusInternalServerError); return }; if body.DeleteFolder && entry.LocalPath != "" { if err := os.RemoveAll(entry.LocalPath); err != nil { http.Error(w, fmt.Sprintf("archived, but folder deletion failed: %v", err), http.StatusInternalServerError); return } }; s.recordActivity(entry, "app.archived", "Archived app", entry.DefaultBranch, "", "stopped", "App archived", "success", ""); writeJSON(w, map[string]string{"status": "ok"})
+}
+
+// handleSaveRegistryOrder validates and persists the active registry order.
+func (s *Server) handleSaveRegistryOrder(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body struct { IDs []string `json:"ids"` }
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if err := s.store.SaveRegistryOrder(body.IDs); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, map[string]string{"status": "ok"})
 }

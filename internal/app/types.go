@@ -61,6 +61,7 @@ type Entry struct {
 	CreatedAt     time.Time   `json:"createdAt"`
 	LastTouchedAt time.Time   `json:"lastTouchedAt"`
 	Archived      bool        `json:"archived"`
+	RegistryOrder int         `json:"registryOrder"`
 }
 
 // ActivityEvent is an immutable snapshot of an operation performed through WIP.

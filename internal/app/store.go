@@ -53,10 +53,12 @@ func (s *Store) EnsureUniqueID(base string) (string, error) {
 	}
 }
 
+// NewStore creates an app metadata store backed by the supplied database.
 func NewStore(conn *sql.DB) *Store {
 	return &Store{conn: conn}
 }
 
+// RecordActivity appends an immutable activity event to the local store.
 func (s *Store) RecordActivity(event ActivityEvent) error {
 	_, err := s.conn.Exec(`
 		INSERT INTO activity_events (
@@ -69,6 +71,7 @@ func (s *Store) RecordActivity(event ActivityEvent) error {
 	return err
 }
 
+// ListActivity returns activity events matching the supplied filters.
 func (s *Store) ListActivity(limit, offset int, appID, eventType, outcome, branch string) ([]ActivityEvent, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 100
@@ -116,14 +119,15 @@ func (s *Store) ListArchivedApps() ([]Entry, error) {
 	return s.listByArchived(true)
 }
 
+// listByArchived lists apps from either the active or archived registry set.
 func (s *Store) listByArchived(archived bool) ([]Entry, error) {
 	rows, err := s.conn.Query(`
 		SELECT id, name, description, stack, status, notes, local_path,
 		       repo_url, default_branch, branches, components,
-		       created_at, last_touched_at, archived
+		       created_at, last_touched_at, archived, registry_order
 		FROM apps
 		WHERE archived = $1
-		ORDER BY last_touched_at DESC
+		ORDER BY registry_order ASC, last_touched_at DESC, id ASC
 	`, archived)
 	if err != nil {
 		return nil, fmt.Errorf("listing apps: %w", err)
@@ -141,7 +145,6 @@ func (s *Store) listByArchived(archived bool) ([]Entry, error) {
 	return entries, rows.Err()
 }
 
-// GetApp returns a single app's full detail.
 // GetApp returns a single app's full detail, regardless of archived state
 // (the detail/edit page needs to work for archived apps too, e.g. to
 // unarchive them).
@@ -149,7 +152,7 @@ func (s *Store) GetApp(id string) (Entry, error) {
 	row := s.conn.QueryRow(`
 		SELECT id, name, description, stack, status, notes, local_path,
 		       repo_url, default_branch, branches, components,
-		       created_at, last_touched_at, archived
+		       created_at, last_touched_at, archived, registry_order
 		FROM apps WHERE id = $1
 	`, id)
 
@@ -160,11 +163,12 @@ func (s *Store) GetApp(id string) (Entry, error) {
 	return entry, err
 }
 
+// GetAppByPath returns the app associated with a local filesystem path.
 func (s *Store) GetAppByPath(path string) (Entry, error) {
 	row := s.conn.QueryRow(`
 		SELECT id, name, description, stack, status, notes, local_path,
 		       repo_url, default_branch, branches, components,
-		       created_at, last_touched_at, archived
+		       created_at, last_touched_at, archived, registry_order
 		FROM apps WHERE local_path = $1 LIMIT 1
 	`, path)
 	entry, err := scanEntry(row)
@@ -187,6 +191,52 @@ func (s *Store) UpdateApp(id string, name, description, localPath string, status
 		WHERE id = $5
 	`, name, description, localPath, status, id)
 	return err
+}
+
+// SaveRegistryOrder persists the complete order of active apps atomically.
+func (s *Store) SaveRegistryOrder(ids []string) error {
+	rows, err := s.conn.Query(`SELECT id FROM apps WHERE archived = 0`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	active := make(map[string]struct{})
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		active[id] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(ids) != len(active) {
+		return fmt.Errorf("registry order must include every active app")
+	}
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		if _, ok := active[id]; !ok {
+			return fmt.Errorf("app is not an active registry entry: %s", id)
+		}
+		if _, ok := seen[id]; ok {
+			return fmt.Errorf("duplicate app in registry order: %s", id)
+		}
+		seen[id] = struct{}{}
+	}
+
+	tx, err := s.conn.Begin()
+	if err != nil {
+		return err
+	}
+	for index, id := range ids {
+		if _, err := tx.Exec(`UPDATE apps SET registry_order = $1 WHERE id = $2 AND archived = 0`, index, id); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // ArchiveApp soft-deletes an app — sets archived = true. It never touches
@@ -279,8 +329,9 @@ func (s *Store) CreateApp(entry Entry) error {
 		INSERT INTO apps (
 			id, name, description, stack, status, notes, local_path,
 			repo_url, default_branch, branches, components,
-			created_at, last_touched_at, archived
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, false)
+			created_at, last_touched_at, archived, registry_order
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, false,
+				COALESCE((SELECT MAX(registry_order) + 1 FROM apps WHERE archived = 0), 0))
 	`,
 		entry.ID, entry.Name, entry.Description, stackJSON, entry.Status,
 		entry.Notes, entry.LocalPath, entry.RepoURL, entry.DefaultBranch,
@@ -289,12 +340,12 @@ func (s *Store) CreateApp(entry Entry) error {
 	return err
 }
 
-// scanner is satisfied by both *sql.Row and *sql.Rows, letting scanEntry
-// serve both GetApp (single row) and ListApps (multiple rows).
+// scanner is satisfied by both *sql.Row and *sql.Rows.
 type scanner interface {
 	Scan(dest ...interface{}) error
 }
 
+// scanEntry decodes one database row into an app entry and its JSON fields.
 func scanEntry(row scanner) (Entry, error) {
 	var e Entry
 	var stackJSON, branchesJSON, componentsJSON []byte
@@ -302,7 +353,7 @@ func scanEntry(row scanner) (Entry, error) {
 	err := row.Scan(
 		&e.ID, &e.Name, &e.Description, &stackJSON, &e.Status, &e.Notes,
 		&e.LocalPath, &e.RepoURL, &e.DefaultBranch, &branchesJSON,
-		&componentsJSON, &e.CreatedAt, &e.LastTouchedAt, &e.Archived,
+		&componentsJSON, &e.CreatedAt, &e.LastTouchedAt, &e.Archived, &e.RegistryOrder,
 	)
 	if err != nil {
 		return Entry{}, err

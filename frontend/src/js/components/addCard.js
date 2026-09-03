@@ -1,6 +1,7 @@
 import { capitalize } from "../utils.js";
 import { openFolder, startComponent, stopComponent } from "../api.js";
 import { openAppDetail, openGitPage, refreshCurrentPage } from "../router.js";
+import { notifyRuntimeChanged } from "../runtimeEvents.js";
 
 export function renderAppCard(entry) {
   const card = document.createElement("div");
@@ -103,14 +104,16 @@ function renderComponentRow(appId, component) {
   const startBtn = document.createElement("button");
   startBtn.textContent = "Start";
   startBtn.onclick = async () => {
-    await startComponent(appId, component.name);
+    const res = await startComponent(appId, component.name);
+    if (res.ok) notifyRuntimeChanged();
     refreshCurrentPage();
   };
 
   const stopBtn = document.createElement("button");
   stopBtn.textContent = "Stop";
   stopBtn.onclick = async () => {
-    await stopComponent(appId, component.name);
+    const res = await stopComponent(appId, component.name);
+    if (res.ok) notifyRuntimeChanged();
     refreshCurrentPage();
   };
 
